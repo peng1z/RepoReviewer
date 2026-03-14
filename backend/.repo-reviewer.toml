@@ -1,0 +1,25 @@
+ignore_globs = [
+  ".git/**",
+  "node_modules/**",
+  ".next/**",
+  "dist/**",
+  "build/**",
+  "coverage/**",
+  "vendor/**",
+  "*.lock",
+  "*.png",
+  "*.jpg",
+  "*.jpeg",
+  "*.gif",
+  "*.ico",
+  "*.pdf",
+  "*.zip",
+  "*.tar",
+  "*.gz",
+  "*.min.js",
+  "*.min.css",
+]
+max_files = 30
+max_file_bytes = 40000
+include_tests = true
+snippet_radius = 6

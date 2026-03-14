@@ -1,0 +1,44 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "repo-reviewer"
+version = "0.1.0"
+description = "Multi-agent GitHub repository review tool with CLI and web UI."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "Peng" }]
+dependencies = [
+  "fastapi>=0.116.0",
+  "uvicorn>=0.35.0",
+  "sse-starlette>=2.1.3",
+  "typer>=0.16.0",
+  "pydantic>=2.11.0",
+  "pydantic-settings>=2.10.0",
+  "langgraph>=0.6.0",
+  "langchain-core>=0.3.0",
+  "litellm>=1.74.0",
+  "PyGithub>=2.5.0",
+  "httpx>=0.28.0",
+  "python-dotenv>=1.1.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.3.0",
+  "pytest-asyncio>=1.1.0",
+]
+
+[project.scripts]
+repo-reviewer = "repo_reviewer.cli:app"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
