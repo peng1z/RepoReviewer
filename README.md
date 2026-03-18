@@ -2,6 +2,8 @@
 
 RepoReviewer is a local-first Python CLI plus web UI that runs a multi-agent code review workflow on public GitHub repositories. It uses FastAPI for the backend API, LangGraph for agent orchestration, LiteLLM for provider abstraction, PyGithub for PR metadata, and Next.js for the frontend.
 
+Paper: [RepoReviewer on arXiv](https://arxiv.org/abs/2603.16107)
+
 ![RepoReviewer Final Report](./docs/report.png)
 
 ## Features

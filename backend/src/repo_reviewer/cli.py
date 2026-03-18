@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import asyncio
+from pathlib import Path
 
 import typer
 
 from .config import DEFAULT_OUTPUT_ROOT
+from .annotation_analysis import summarize_annotations as summarize_annotations_file
+from .evaluation import run_evaluation_sync
 from .models import ReviewRequest
 from .provider import env_hint_for_provider, resolve_model
 from .service import run_review
@@ -49,3 +52,23 @@ def review(
     typer.echo(f"Review complete: {len(result.comments)} findings")
     typer.echo(f"JSON: {result.artifacts.json_path}")
     typer.echo(f"Markdown: {result.artifacts.markdown_path}")
+
+
+@app.command()
+def evaluate(
+    dataset: str = typer.Argument(..., help="Path to evaluation dataset JSON."),
+    output_root: str = typer.Option("../paper/experiments", "--output-root", help="Directory for experiment outputs."),
+) -> None:
+    experiment_dir, rows = run_evaluation_sync(Path(dataset), Path(output_root))
+    typer.echo(f"Evaluation complete: {len(rows)} runs")
+    typer.echo(f"Artifacts: {experiment_dir}")
+
+
+@app.command()
+def summarize_annotations(
+    annotation_sheet: str = typer.Argument(..., help="Path to annotation-sheet.csv."),
+    output_root: str = typer.Option("../paper/experiments/summary", "--output-root", help="Directory for aggregated annotation outputs."),
+) -> None:
+    csv_path, json_path = summarize_annotations_file(Path(annotation_sheet), Path(output_root))
+    typer.echo(f"Annotation summary CSV: {csv_path}")
+    typer.echo(f"Annotation summary JSON: {json_path}")

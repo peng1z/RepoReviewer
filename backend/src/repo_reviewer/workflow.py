@@ -25,6 +25,16 @@ def _coerce_string_list(value, *, fallback: list[str] | None = None) -> list[str
     return fallback or []
 
 
+def _coerce_string(value, *, fallback: str) -> str:
+    if isinstance(value, str):
+        return value
+    if value is None:
+        return fallback
+    if isinstance(value, (list, dict)):
+        return json.dumps(value, ensure_ascii=True)
+    return str(value)
+
+
 async def emit(progress: ProgressCallback | None, event: ProgressEvent) -> None:
     if progress:
         await progress(event)
@@ -106,8 +116,8 @@ async def context_agent(state: ReviewState, progress: ProgressCallback | None = 
             "architecture_notes": key_files[:5],
         }
     state.project_context = ProjectContext(
-        readme_summary=parsed.get("readme_summary", "README summary unavailable."),
-        folder_summary=parsed.get("folder_summary", "Folder summary unavailable."),
+        readme_summary=_coerce_string(parsed.get("readme_summary"), fallback="README summary unavailable."),
+        folder_summary=_coerce_string(parsed.get("folder_summary"), fallback="Folder summary unavailable."),
         key_files=key_files,
         architecture_notes=_coerce_string_list(parsed.get("architecture_notes"), fallback=key_files[:5]),
     )
