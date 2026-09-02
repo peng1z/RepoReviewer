@@ -311,7 +311,7 @@ async def _review_files(
     single_agent: bool,
 ) -> list[ReviewComment]:
     if single_agent:
-        return await _single_agent_review(prepared, context)
+        return await single_agent_review(prepared, context)
 
     from .models import ReviewState
 
@@ -327,7 +327,7 @@ async def _review_files(
     return normalize_comments(state.comments)
 
 
-async def _single_agent_review(prepared: PreparedRun, context: ProjectContext) -> list[ReviewComment]:
+async def single_agent_review(prepared: PreparedRun, context: ProjectContext) -> list[ReviewComment]:
     file_blocks: list[str] = []
     for file_name in prepared.files_to_review:
         path = prepared.workspace_dir / file_name

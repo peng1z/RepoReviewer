@@ -7,6 +7,7 @@ import typer
 
 from .config import DEFAULT_OUTPUT_ROOT
 from .annotation_analysis import summarize_annotations as summarize_annotations_file
+from .benchmark import run_benchmark_sync
 from .evaluation import run_evaluation_sync
 from .models import ReviewRequest
 from .provider import env_hint_for_provider, resolve_model
@@ -72,3 +73,18 @@ def summarize_annotations(
     csv_path, json_path = summarize_annotations_file(Path(annotation_sheet), Path(output_root))
     typer.echo(f"Annotation summary CSV: {csv_path}")
     typer.echo(f"Annotation summary JSON: {json_path}")
+
+
+@app.command()
+def benchmark(
+    dataset: str = typer.Argument(..., help="Path to mutation benchmark dataset JSON."),
+    output_root: str = typer.Option("../paper/experiments", "--output-root", help="Directory for benchmark outputs."),
+    workspace_root: str = typer.Option(".cache/repo-reviewer-benchmark", "--workspace-root", help="Scratch directory for cloned and mutated copies."),
+) -> None:
+    """Inject known defects into real repositories and measure detection rates."""
+    experiment_dir, outcomes = run_benchmark_sync(
+        Path(dataset), Path(output_root), Path(workspace_root)
+    )
+    hits = sum(1 for outcome in outcomes if outcome.outcome == "hit")
+    typer.echo(f"Benchmark complete: {len(outcomes)} scored mutant/method pairs, {hits} positional hits")
+    typer.echo(f"Artifacts: {experiment_dir}")
