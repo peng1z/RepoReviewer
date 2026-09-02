@@ -79,9 +79,18 @@ def load_benchmark_dataset(path: Path) -> BenchmarkDataset:
 
 
 def _normalize_path(value: str | None) -> str:
+    """Reduce a reported path to a comparable repo-relative form.
+
+    Only the `./` and leading `/` prefixes are removed. `str.lstrip` takes a
+    character set rather than a prefix, so stripping "./" would also mangle
+    legitimate dotfile paths such as `.github/workflows/ci.yml`.
+    """
     if not value:
         return ""
-    return value.replace("\\", "/").lstrip("./").strip()
+    text = value.replace("\\", "/").strip()
+    while text.startswith("./"):
+        text = text[2:]
+    return text.lstrip("/")
 
 
 def _mentions_defect(comment: ReviewComment, mutant: Mutant) -> bool:
@@ -293,8 +302,12 @@ async def run_benchmark_dataset(
     unreachable: list[dict[str, str]] = []
 
     for target in dataset.targets:
-        repo_name = parse_github_url(target.github_url).repo
-        pristine = workspace_root / "pristine" / repo_name
+        parsed = parse_github_url(target.github_url)
+        # Identify by owner/repo: two targets can share a repo name, and
+        # collapsing them would silently merge their outcomes.
+        repo_name = parsed.full_name
+        slug = f"{parsed.owner}-{parsed.repo}"
+        pristine = workspace_root / "pristine" / slug
         clone_repo(target.github_url, pristine)
 
         mutants = plan_mutants(pristine, target, dataset)
@@ -302,13 +315,14 @@ async def run_benchmark_dataset(
             unreachable.append(
                 {
                     "repo": repo_name,
+                    "github_url": target.github_url,
                     "reason": "no reviewable Python file yielded a valid mutant",
                 }
             )
             continue
 
         for index, mutant in enumerate(mutants):
-            mutated = workspace_root / "mutated" / f"{repo_name}-{index}"
+            mutated = workspace_root / "mutated" / f"{slug}-{index}"
             _copy_tree(pristine, mutated)
             apply_mutant(mutated, mutant)
             for method in dataset.methods:

@@ -346,7 +346,12 @@ def select_mutants(
         path = repo_root / relative
         if not path.is_file():
             continue
-        source = path.read_text(encoding="utf-8", errors="ignore")
+        try:
+            source = path.read_text(encoding="utf-8")
+        except (UnicodeDecodeError, OSError):
+            # apply_mutant() reads strictly. Selecting from a lossy decode here
+            # would either crash on injection or write back a corrupted file.
+            continue
         for operator in operators:
             by_operator[operator].extend(find_candidates(source, relative, operator))
 

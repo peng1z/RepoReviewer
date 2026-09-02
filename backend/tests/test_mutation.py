@@ -140,3 +140,18 @@ def test_apply_mutant_writes_file(tmp_path: Path) -> None:
     written = (tmp_path / mutant.file).read_text(encoding="utf-8").splitlines()
     assert written[mutant.line - 1] == mutant.mutated_line
     assert len(written) == len(SAMPLE.splitlines())
+
+
+def test_undecodable_file_is_skipped_rather_than_crashing(tmp_path: Path) -> None:
+    """apply_mutant reads strictly, so selection must not offer a lossy candidate."""
+    (tmp_path / "legacy.py").write_bytes(
+        "x = 1\nif a <= b:  # caf\xe9\n    pass\n".encode("latin-1")
+    )
+    (tmp_path / "clean.py").write_text(SAMPLE, encoding="utf-8")
+
+    mutants = select_mutants(tmp_path, ["legacy.py", "clean.py"], count=10, seed=1)
+
+    assert mutants, "the decodable file should still yield mutants"
+    assert all(m.file == "clean.py" for m in mutants)
+    for mutant in mutants:
+        apply_mutant(tmp_path, mutant)  # must not raise UnicodeDecodeError

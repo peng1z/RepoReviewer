@@ -290,3 +290,68 @@ async def test_repo_without_valid_mutants_is_recorded_as_unreachable(tmp_path: P
     )
     assert outcomes == []
     assert (experiment_dir / "unreachable.json").exists()
+
+
+# --- regressions ---------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "path",
+    [".github/workflows/ci.yml", ".env", ".config/settings.py"],
+)
+def test_dotfile_paths_are_not_mangled_by_normalization(path: str) -> None:
+    """`lstrip("./")` strips characters, not a prefix, and would eat the dot."""
+    mutant = _mutant(line=20, file=path)
+    outcome, _ = score_mutant(mutant, [_comment(path, 20)])
+    assert outcome == "hit"
+
+
+def test_dotfile_does_not_match_its_dotless_twin() -> None:
+    mutant = _mutant(line=20, file=".github/ci.py")
+    assert score_mutant(mutant, [_comment("github/ci.py", 20)])[0] == "miss"
+
+
+def test_parent_relative_path_is_left_alone() -> None:
+    assert score_mutant(_mutant(file="../outside.py"), [_comment("outside.py", 20)])[0] == "miss"
+
+
+@pytest.mark.asyncio
+async def test_same_repo_name_under_different_owners_stays_separate(tmp_path: Path, monkeypatch) -> None:
+    """org1/foo and org2/foo must not share a workspace or collapse in results."""
+    source_repo = tmp_path / "source"
+    source_repo.mkdir()
+    _write_repo(source_repo)
+
+    cloned_to: list[str] = []
+
+    def fake_clone(url: str, destination: Path) -> Path:
+        cloned_to.append(destination.name)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        if not destination.exists():
+            import shutil
+            shutil.copytree(source_repo, destination)
+        return destination
+
+    monkeypatch.setattr(bench, "clone_repo", fake_clone)
+
+    async def fake_runner(*, repo_root, repo_name, method, dataset, target):
+        return []
+
+    dataset = BenchmarkDataset(
+        name="collision",
+        methods=["full"],
+        mutants_per_repo=1,
+        targets=[
+            BenchmarkTarget(github_url="https://github.com/org1/foo"),
+            BenchmarkTarget(github_url="https://github.com/org2/foo"),
+        ],
+    )
+    _, outcomes = await run_benchmark_dataset(
+        dataset,
+        output_root=tmp_path / "out",
+        workspace_root=tmp_path / "work",
+        review_runner=fake_runner,
+    )
+
+    assert {o.repo_name for o in outcomes} == {"org1/foo", "org2/foo"}
+    assert len(set(cloned_to)) == 2, f"workspaces collided: {cloned_to}"
