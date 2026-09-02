@@ -16,3 +16,6 @@ node_modules/
 outputs/
 .env
 paper/
+
+# Frontend build artifacts
+*.tsbuildinfo
