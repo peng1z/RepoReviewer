@@ -1,6 +1,7 @@
 from pathlib import Path
 
 import pytest
+from pydantic import ValidationError
 
 from repo_reviewer import benchmark as bench
 from repo_reviewer.benchmark import (
@@ -355,3 +356,72 @@ async def test_same_repo_name_under_different_owners_stays_separate(tmp_path: Pa
 
     assert {o.repo_name for o in outcomes} == {"org1/foo", "org2/foo"}
     assert len(set(cloned_to)) == 2, f"workspaces collided: {cloned_to}"
+
+
+def test_dataset_rejects_an_unknown_provider(tmp_path: Path) -> None:
+    """Bad providers should fail at load, not after cloning and mutating."""
+    path = tmp_path / "dataset.json"
+    path.write_text(
+        '{"name":"b","provider":"not-a-provider",'
+        '"targets":[{"github_url":"https://github.com/pallets/click"}]}',
+        encoding="utf-8",
+    )
+    with pytest.raises(ValidationError):
+        load_benchmark_dataset(path)
+
+
+@pytest.mark.asyncio
+async def test_clone_runs_off_the_event_loop(tmp_path: Path, monkeypatch) -> None:
+    """A blocking clone must not stall other coroutines.
+
+    fake_clone waits for an event that only a concurrent coroutine can set. If
+    the clone ran on the event loop that coroutine could never be scheduled, the
+    wait would time out, and `released_in_time` would record False.
+    """
+    import asyncio
+    import shutil
+    import threading
+
+    source_repo = tmp_path / "source"
+    source_repo.mkdir()
+    _write_repo(source_repo)
+
+    gate = threading.Event()
+    released_in_time: list[bool] = []
+
+    def fake_clone(url: str, destination: Path) -> Path:
+        released_in_time.append(gate.wait(timeout=5))
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        if not destination.exists():
+            shutil.copytree(source_repo, destination)
+        return destination
+
+    monkeypatch.setattr(bench, "clone_repo", fake_clone)
+
+    async def release_soon() -> None:
+        await asyncio.sleep(0.05)
+        gate.set()
+
+    async def fake_runner(*, repo_root, repo_name, method, dataset, target):
+        return []
+
+    dataset = BenchmarkDataset(
+        name="nonblocking",
+        methods=["full"],
+        mutants_per_repo=1,
+        targets=[BenchmarkTarget(github_url="https://github.com/pallets/click")],
+    )
+
+    releaser = asyncio.create_task(release_soon())
+    await asyncio.wait_for(
+        run_benchmark_dataset(
+            dataset,
+            output_root=tmp_path / "out",
+            workspace_root=tmp_path / "work",
+            review_runner=fake_runner,
+        ),
+        timeout=15,
+    )
+    await releaser
+
+    assert released_in_time == [True]

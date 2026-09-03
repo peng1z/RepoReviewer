@@ -109,7 +109,9 @@ def _strip_literals(line: str) -> str:
                 out.append(char)
         else:
             if char == "\\":
-                out.append("  ")
+                # Consume the escape pair as two blanks -- but a backslash at
+                # end of line (a continued string) escapes nothing, so emit one.
+                out.append("  " if index + 1 < len(line) else " ")
                 index += 2
                 continue
             out.append(" ")

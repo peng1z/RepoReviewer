@@ -14,7 +14,7 @@ from pydantic import BaseModel, Field
 from .config import load_repo_config
 from .evaluation import EvaluationMethod
 from .github_client import clone_repo, parse_github_url
-from .models import ReviewComment
+from .models import ProviderName, ReviewComment
 from .mutation import ALL_OPERATORS, Mutant, MutationOperator, apply_mutant, select_mutants
 from .repository import collect_repo_files, prioritize_files
 
@@ -38,7 +38,9 @@ class BenchmarkTarget(BaseModel):
 
 class BenchmarkDataset(BaseModel):
     name: str
-    provider: str = "openai"
+    # Constrained so an unusable provider fails at dataset load, rather than
+    # after cloning and mutating a repository.
+    provider: ProviderName = "openai"
     model: str = "openai/gpt-4.1-mini"
     methods: list[EvaluationMethod] = Field(
         default_factory=lambda: ["full", "single_agent", "no_context", "no_priority"]
@@ -247,7 +249,7 @@ async def pipeline_review_runner(
 
     request = ReviewRequest(
         github_url=target.github_url,
-        provider=dataset.provider,  # type: ignore[arg-type]
+        provider=dataset.provider,
         model=dataset.model,
         max_files=target.max_files,
         max_file_bytes=target.max_file_bytes,
@@ -308,7 +310,9 @@ async def run_benchmark_dataset(
         repo_name = parsed.full_name
         slug = f"{parsed.owner}-{parsed.repo}"
         pristine = workspace_root / "pristine" / slug
-        clone_repo(target.github_url, pristine)
+        # git clone and the working-copy duplication are blocking; keep them
+        # off the event loop so this coroutine stays usable from a server.
+        await asyncio.to_thread(clone_repo, target.github_url, pristine)
 
         mutants = plan_mutants(pristine, target, dataset)
         if not mutants:
@@ -323,7 +327,7 @@ async def run_benchmark_dataset(
 
         for index, mutant in enumerate(mutants):
             mutated = workspace_root / "mutated" / f"{slug}-{index}"
-            _copy_tree(pristine, mutated)
+            await asyncio.to_thread(_copy_tree, pristine, mutated)
             apply_mutant(mutated, mutant)
             for method in dataset.methods:
                 comments = await review_runner(

@@ -155,3 +155,21 @@ def test_undecodable_file_is_skipped_rather_than_crashing(tmp_path: Path) -> Non
     assert all(m.file == "clean.py" for m in mutants)
     for mutant in mutants:
         apply_mutant(tmp_path, mutant)  # must not raise UnicodeDecodeError
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        's = "abc\\',          # trailing backslash inside a string
+        'v = "tail\\',
+        "x = 'a\\\\b'",        # escaped backslash mid-line
+        's = "ok"  # <= note',
+        "plain = 1",
+        "",
+    ],
+)
+def test_strip_literals_preserves_length(line: str) -> None:
+    """Match offsets are applied to the original line, so positions must align."""
+    from repo_reviewer.mutation import _strip_literals
+
+    assert len(_strip_literals(line)) == len(line)
