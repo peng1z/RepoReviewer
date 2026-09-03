@@ -1,12 +1,88 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import os
+import random
 import re
+import time
+from collections import deque
 
+import litellm
 from litellm import acompletion
 
 from .models import ReviewComment
+
+
+#: Errors worth another attempt: transient server, network and quota faults.
+#: Anything else (bad request, auth, unknown model) is a permanent failure and
+#: retrying it would only waste quota.
+RETRYABLE_ERRORS = (
+    litellm.RateLimitError,
+    litellm.APIConnectionError,
+    litellm.ServiceUnavailableError,
+    litellm.InternalServerError,
+    litellm.Timeout,
+)
+
+
+class RateLimiter:
+    """Allows at most `max_calls` acquisitions per rolling `period` seconds."""
+
+    def __init__(self, max_calls: int, period: float = 60.0) -> None:
+        self.max_calls = max_calls
+        self.period = period
+        self._calls: deque[float] = deque()
+        self._lock = asyncio.Lock()
+
+    async def acquire(self) -> None:
+        if self.max_calls <= 0:
+            return
+        async with self._lock:
+            while True:
+                now = time.monotonic()
+                while self._calls and now - self._calls[0] >= self.period:
+                    self._calls.popleft()
+                if len(self._calls) < self.max_calls:
+                    self._calls.append(now)
+                    return
+                await asyncio.sleep(self.period - (now - self._calls[0]) + 0.01)
+
+
+_limiter: RateLimiter | None = None
+_max_retries: int | None = None
+_retry_base: float | None = None
+
+
+def configure_llm(
+    *,
+    requests_per_minute: int | None = None,
+    max_retries: int | None = None,
+    retry_base_seconds: float | None = None,
+) -> None:
+    """Override the pacing and retry policy (used by the benchmark and tests)."""
+    global _limiter, _max_retries, _retry_base
+    if requests_per_minute is not None:
+        _limiter = RateLimiter(requests_per_minute)
+    if max_retries is not None:
+        _max_retries = max_retries
+    if retry_base_seconds is not None:
+        _retry_base = retry_base_seconds
+
+
+def _policy() -> tuple[RateLimiter, int, float]:
+    global _limiter, _max_retries, _retry_base
+    if _limiter is None or _max_retries is None or _retry_base is None:
+        from .config import Settings
+
+        settings = Settings()
+        if _limiter is None:
+            _limiter = RateLimiter(settings.llm_requests_per_minute)
+        if _max_retries is None:
+            _max_retries = settings.llm_max_retries
+        if _retry_base is None:
+            _retry_base = settings.llm_retry_base_seconds
+    return _limiter, _max_retries, _retry_base
 
 
 MODEL_ALIASES = {
@@ -33,15 +109,31 @@ async def structured_completion(
     user_prompt: str,
 ) -> str:
     resolved_model = resolve_model(provider, model)
-    response = await acompletion(
-        model=resolved_model,
-        messages=[
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt},
-        ],
-        temperature=0.2,
-    )
-    return response.choices[0].message.content or ""
+    limiter, max_retries, retry_base = _policy()
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": user_prompt},
+    ]
+
+    for attempt in range(max_retries + 1):
+        await limiter.acquire()
+        try:
+            response = await acompletion(
+                model=resolved_model,
+                messages=messages,
+                temperature=0.2,
+            )
+        except RETRYABLE_ERRORS:
+            if attempt == max_retries:
+                raise
+            # Exponential backoff with jitter, so parallel callers do not line
+            # up and hit the same limit again in lockstep.
+            delay = retry_base * (2**attempt)
+            await asyncio.sleep(delay + random.uniform(0, retry_base))
+            continue
+        return response.choices[0].message.content or ""
+
+    raise AssertionError("unreachable")  # pragma: no cover
 
 
 def env_hint_for_provider(provider: str) -> str:

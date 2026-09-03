@@ -65,6 +65,17 @@ class MutantOutcome(BaseModel):
     findings_in_file: int = 0
 
 
+class BenchmarkError(BaseModel):
+    """A mutant/method pair that could not be scored. Excluded from all rates."""
+
+    repo_name: str
+    method: str
+    operator: str
+    file: str
+    line: int
+    error: str
+
+
 class MethodSummary(BaseModel):
     method: str
     scored_mutants: int
@@ -256,17 +267,31 @@ async def pipeline_review_runner(
         include_tests=target.include_tests,
     )
 
-    state = ReviewState(request=request, workspace_dir=str(repo_root), repo_name=repo_name)
-    state = await context_agent(state)
-    assert state.project_context is not None
-
     if method == "no_context":
-        state.project_context = ProjectContext(
-            readme_summary="ContextAgent disabled for ablation.",
-            folder_summary="ContextAgent disabled for ablation.",
-            key_files=[],
-            architecture_notes=[],
+        # Running ContextAgent only to throw its output away would spend a call
+        # per mutant and make the ablation impure. The file list it also
+        # produces is derivable without an LLM.
+        state = ReviewState(
+            request=request,
+            workspace_dir=str(repo_root),
+            repo_name=repo_name,
+            files_to_review=resolve_reviewable_files(
+                repo_root,
+                include_tests=target.include_tests,
+                max_file_bytes=target.max_file_bytes,
+                max_files=target.max_files,
+            ),
+            project_context=ProjectContext(
+                readme_summary="ContextAgent disabled for ablation.",
+                folder_summary="ContextAgent disabled for ablation.",
+                key_files=[],
+                architecture_notes=[],
+            ),
         )
+    else:
+        state = ReviewState(request=request, workspace_dir=str(repo_root), repo_name=repo_name)
+        state = await context_agent(state)
+    assert state.project_context is not None
 
     if method == "single_agent":
         prepared = PreparedRun(
@@ -301,7 +326,13 @@ async def run_benchmark_dataset(
     )
 
     outcomes: list[MutantOutcome] = []
+    errors: list[BenchmarkError] = []
     unreachable: list[dict[str, str]] = []
+    # Appended to as results arrive. A run can take over an hour against a
+    # rate-limited provider, and losing all of it to a late failure is worse
+    # than the cost of writing each row twice.
+    outcomes_log = experiment_dir / "mutant-outcomes.jsonl"
+    errors_log = experiment_dir / "errors.jsonl"
 
     for target in dataset.targets:
         parsed = parse_github_url(target.github_url)
@@ -330,16 +361,29 @@ async def run_benchmark_dataset(
             await asyncio.to_thread(_copy_tree, pristine, mutated)
             apply_mutant(mutated, mutant)
             for method in dataset.methods:
-                comments = await review_runner(
-                    repo_root=mutated,
-                    repo_name=repo_name,
-                    method=method,
-                    dataset=dataset,
-                    target=target,
-                )
-                outcomes.append(
-                    build_outcome(mutant, comments, repo_name=repo_name, method=method)
-                )
+                try:
+                    comments = await review_runner(
+                        repo_root=mutated,
+                        repo_name=repo_name,
+                        method=method,
+                        dataset=dataset,
+                        target=target,
+                    )
+                except Exception as exc:  # noqa: BLE001 - one failure must not end the run
+                    error = BenchmarkError(
+                        repo_name=repo_name,
+                        method=method,
+                        operator=mutant.operator,
+                        file=mutant.file,
+                        line=mutant.line,
+                        error=f"{type(exc).__name__}: {exc}",
+                    )
+                    errors.append(error)
+                    _append_jsonl(errors_log, error)
+                    continue
+                outcome = build_outcome(mutant, comments, repo_name=repo_name, method=method)
+                outcomes.append(outcome)
+                _append_jsonl(outcomes_log, outcome)
             shutil.rmtree(mutated, ignore_errors=True)
 
     export_outcomes(outcomes, experiment_dir / "mutant-outcomes.csv")
@@ -349,7 +393,16 @@ async def run_benchmark_dataset(
         (experiment_dir / "unreachable.json").write_text(
             json.dumps(unreachable, indent=2), encoding="utf-8"
         )
+    if errors:
+        (experiment_dir / "errors.json").write_text(
+            json.dumps([e.model_dump() for e in errors], indent=2), encoding="utf-8"
+        )
     return experiment_dir, outcomes
+
+
+def _append_jsonl(path: Path, record: BaseModel) -> None:
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(record.model_dump(mode="json")) + "\n")
 
 
 def _copy_tree(source: Path, destination: Path) -> None:

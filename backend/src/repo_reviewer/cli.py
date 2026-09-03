@@ -8,6 +8,7 @@ import typer
 from .config import DEFAULT_OUTPUT_ROOT
 from .annotation_analysis import summarize_annotations as summarize_annotations_file
 from .benchmark import run_benchmark_sync
+from .provider import configure_llm
 from .evaluation import run_evaluation_sync
 from .models import ReviewRequest
 from .provider import env_hint_for_provider, resolve_model
@@ -80,8 +81,11 @@ def benchmark(
     dataset: str = typer.Argument(..., help="Path to mutation benchmark dataset JSON."),
     output_root: str = typer.Option("../paper/experiments", "--output-root", help="Directory for benchmark outputs."),
     workspace_root: str = typer.Option(".cache/repo-reviewer-benchmark", "--workspace-root", help="Scratch directory for cloned and mutated copies."),
+    requests_per_minute: int | None = typer.Option(None, "--rpm", help="Cap LLM calls per minute (0 disables pacing)."),
+    max_retries: int | None = typer.Option(None, "--max-retries", help="Retries for rate-limit and transient errors."),
 ) -> None:
     """Inject known defects into real repositories and measure detection rates."""
+    configure_llm(requests_per_minute=requests_per_minute, max_retries=max_retries)
     experiment_dir, outcomes = run_benchmark_sync(
         Path(dataset), Path(output_root), Path(workspace_root)
     )

@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 import pytest
@@ -425,3 +426,87 @@ async def test_clone_runs_off_the_event_loop(tmp_path: Path, monkeypatch) -> Non
     await releaser
 
     assert released_in_time == [True]
+
+
+# --- resilience -----------------------------------------------------------
+
+
+async def _run_with_runner(tmp_path: Path, monkeypatch, runner, *, methods, mutants=2):
+    source_repo = tmp_path / "source"
+    source_repo.mkdir()
+    _write_repo(source_repo)
+
+    def fake_clone(url: str, destination: Path) -> Path:
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        if not destination.exists():
+            import shutil
+            shutil.copytree(source_repo, destination)
+        return destination
+
+    monkeypatch.setattr(bench, "clone_repo", fake_clone)
+    dataset = BenchmarkDataset(
+        name="resilience",
+        methods=methods,
+        mutants_per_repo=mutants,
+        targets=[BenchmarkTarget(github_url="https://github.com/pallets/click")],
+    )
+    return await run_benchmark_dataset(
+        dataset,
+        output_root=tmp_path / "out",
+        workspace_root=tmp_path / "work",
+        review_runner=runner,
+    )
+
+
+@pytest.mark.asyncio
+async def test_a_failing_method_is_recorded_without_ending_the_run(tmp_path: Path, monkeypatch) -> None:
+    async def half_broken(*, repo_root, repo_name, method, dataset, target):
+        if method == "single_agent":
+            raise RuntimeError("provider exploded")
+        return [_comment("pkg/core.py", 4)]
+
+    experiment_dir, outcomes = await _run_with_runner(
+        tmp_path, monkeypatch, half_broken, methods=["full", "single_agent"]
+    )
+
+    # The healthy method still produced scored outcomes.
+    assert {o.method for o in outcomes} == {"full"}
+    errors = json.loads((experiment_dir / "errors.json").read_text(encoding="utf-8"))
+    assert len(errors) == 2
+    assert all(e["method"] == "single_agent" for e in errors)
+    assert "provider exploded" in errors[0]["error"]
+
+
+@pytest.mark.asyncio
+async def test_failures_are_excluded_from_the_rates(tmp_path: Path, monkeypatch) -> None:
+    """A method that errors must not be scored as if it missed."""
+    async def half_broken(*, repo_root, repo_name, method, dataset, target):
+        if method == "single_agent":
+            raise RuntimeError("boom")
+        return [_comment("pkg/core.py", 4)]
+
+    _, outcomes = await _run_with_runner(
+        tmp_path, monkeypatch, half_broken, methods=["full", "single_agent"]
+    )
+    assert [s.method for s in summarize_outcomes(outcomes)] == ["full"]
+
+
+@pytest.mark.asyncio
+async def test_results_are_written_incrementally(tmp_path: Path, monkeypatch) -> None:
+    """A late crash must not take the earlier results with it."""
+    seen: list[str] = []
+
+    async def crash_on_last(*, repo_root, repo_name, method, dataset, target):
+        seen.append(method)
+        if len(seen) >= 3:
+            raise RuntimeError("late failure")
+        return [_comment("pkg/core.py", 4)]
+
+    experiment_dir, outcomes = await _run_with_runner(
+        tmp_path, monkeypatch, crash_on_last, methods=["full", "single_agent"]
+    )
+
+    lines = (experiment_dir / "mutant-outcomes.jsonl").read_text(encoding="utf-8").strip().splitlines()
+    assert len(lines) == 2, "results written before the failure should survive it"
+    assert json.loads(lines[0])["method"] == "full"
+    assert (experiment_dir / "errors.jsonl").exists()
