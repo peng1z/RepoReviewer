@@ -49,6 +49,34 @@ class RateLimiter:
                 await asyncio.sleep(self.period - (now - self._calls[0]) + 0.01)
 
 
+#: Never sleep longer than this on a provider's say-so.
+MAX_RETRY_SLEEP_SECONDS = 90.0
+
+
+def retry_after_seconds(exc: Exception) -> float | None:
+    """Read the provider's own backoff hint, if it sent one.
+
+    OpenRouter returns `Retry-After` and a `retry_after_seconds` field on
+    upstream pool exhaustion. Obeying it beats guessing.
+    """
+    response = getattr(exc, "response", None)
+    headers = getattr(response, "headers", None)
+    if headers:
+        raw = headers.get("retry-after") or headers.get("Retry-After")
+        if raw:
+            try:
+                return max(0.0, float(raw))
+            except (TypeError, ValueError):
+                pass
+    match = re.search(r'"retry_after_seconds"\s*:\s*([0-9.]+)', str(exc))
+    if match:
+        try:
+            return max(0.0, float(match.group(1)))
+        except ValueError:
+            pass
+    return None
+
+
 _limiter: RateLimiter | None = None
 _max_retries: int | None = None
 _retry_base: float | None = None
@@ -123,12 +151,17 @@ async def structured_completion(
                 messages=messages,
                 temperature=0.2,
             )
-        except RETRYABLE_ERRORS:
+        except RETRYABLE_ERRORS as exc:
             if attempt == max_retries:
                 raise
             # Exponential backoff with jitter, so parallel callers do not line
-            # up and hit the same limit again in lockstep.
+            # up and hit the same limit again in lockstep. If the provider told
+            # us how long to wait, never wait less than that.
             delay = retry_base * (2**attempt)
+            hint = retry_after_seconds(exc)
+            if hint is not None:
+                delay = max(delay, hint)
+            delay = min(delay, MAX_RETRY_SLEEP_SECONDS)
             await asyncio.sleep(delay + random.uniform(0, retry_base))
             continue
         return response.choices[0].message.content or ""
@@ -181,6 +214,25 @@ def extract_json_payload(text: str) -> str:
     if end < start:
         raise ValueError("No complete JSON payload found")
     return stripped[start : end + 1]
+
+
+def coerce_comment_payload(payload) -> list[dict]:
+    """Normalise the shapes models actually return into a list of finding dicts.
+
+    A bare list is the documented contract, but models routinely wrap it in an
+    object (``{"comments": [...]}``) or return a single finding on its own.
+    Iterating a wrapper dict yields its keys, so the caller would try to
+    validate the string "comments" as a ReviewComment.
+    """
+    if isinstance(payload, list):
+        return [item for item in payload if isinstance(item, dict)]
+    if isinstance(payload, dict):
+        if "file" in payload and ("issue" in payload or "suggestion" in payload):
+            return [payload]
+        for value in payload.values():
+            if isinstance(value, list):
+                return [item for item in value if isinstance(item, dict)]
+    return []
 
 
 def parse_json_response(text: str):

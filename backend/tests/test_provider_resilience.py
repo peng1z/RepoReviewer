@@ -90,3 +90,74 @@ async def test_permanent_errors_are_not_retried(monkeypatch) -> None:
             provider="openrouter", model="openrouter/x", system_prompt="s", user_prompt="u"
         )
     assert attempts["n"] == 1
+
+
+def test_retry_after_is_read_from_headers() -> None:
+    class Resp:
+        headers = {"retry-after": "7"}
+
+    exc = RuntimeError("nope")
+    exc.response = Resp()  # type: ignore[attr-defined]
+    assert provider.retry_after_seconds(exc) == 7.0
+
+
+def test_retry_after_is_read_from_the_openrouter_payload() -> None:
+    exc = RuntimeError(
+        '{"error":{"code":429,"metadata":{"provider_error_code":"upstream_429",'
+        '"retry_after_seconds":5,"headers":{"Retry-After":"5"}}}}'
+    )
+    assert provider.retry_after_seconds(exc) == 5.0
+
+
+def test_retry_after_absent_returns_none() -> None:
+    assert provider.retry_after_seconds(RuntimeError("plain failure")) is None
+
+
+@pytest.mark.asyncio
+async def test_provider_hint_overrides_a_shorter_backoff(monkeypatch) -> None:
+    provider.configure_llm(requests_per_minute=0, max_retries=1, retry_base_seconds=0.0)
+    slept: list[float] = []
+
+    async def fake_sleep(d):
+        slept.append(d)
+
+    async def limited_then_ok(**kwargs):
+        if not slept:
+            raise litellm.RateLimitError(
+                '{"metadata":{"retry_after_seconds":4}}', llm_provider="openrouter", model="m"
+            )
+
+        class R:
+            choices = [type("C", (), {"message": type("M", (), {"content": "[]"})()})()]
+
+        return R()
+
+    monkeypatch.setattr(provider.asyncio, "sleep", fake_sleep)
+    monkeypatch.setattr(provider, "acompletion", limited_then_ok)
+    await provider.structured_completion(
+        provider="openrouter", model="openrouter/x", system_prompt="s", user_prompt="u"
+    )
+    assert slept and slept[0] >= 4.0, f"should honour the 4s hint, slept {slept}"
+
+
+@pytest.mark.parametrize(
+    ("payload", "expected"),
+    [
+        ([{"file": "a.py", "issue": "x"}], 1),
+        ({"comments": [{"file": "a.py", "issue": "x"}, {"file": "b.py", "issue": "y"}]}, 2),
+        ({"findings": [{"file": "a.py", "issue": "x"}]}, 1),
+        ({"file": "a.py", "line": 3, "issue": "x", "suggestion": "y"}, 1),
+        ([], 0),
+        ({}, 0),
+        ("nonsense", 0),
+        ([{"file": "a.py", "issue": "x"}, "stray string"], 1),
+    ],
+)
+def test_coerce_comment_payload_handles_model_shapes(payload, expected) -> None:
+    assert len(provider.coerce_comment_payload(payload)) == expected
+
+
+def test_wrapped_payload_is_not_iterated_as_keys() -> None:
+    """Iterating {"comments": [...]} yields the string "comments", not findings."""
+    out = provider.coerce_comment_payload({"comments": [{"file": "a.py", "issue": "x"}]})
+    assert out == [{"file": "a.py", "issue": "x"}]
