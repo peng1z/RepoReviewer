@@ -126,6 +126,39 @@ Files:
 - `review.json`
 - `review.md`
 
+## Mutation Benchmark
+
+Review quality is measured against defects that are injected on purpose, so the
+ground truth is known by construction rather than annotated by hand.
+
+```bash
+repo-reviewer benchmark backend/datasets/mutation-benchmark.json
+```
+
+The harness clones each target repository, injects one known defect at a time,
+runs every ablation method over the mutated copy, and scores each finding
+automatically:
+
+- **hit** -- a finding within 3 lines of the injected defect, in the right file
+- **weak_hit** -- right file, wrong or missing line, but the text describes the defect
+- **miss** -- neither
+
+Five single-line operators are used (`off_by_one`, `negate_condition`,
+`swap_operator`, `invert_none_check`, `widen_except`). Each rewrites exactly one
+line and leaves every other line number untouched, which is what makes positional
+scoring meaningful. Defects are only injected into files the pipeline will
+actually review, so the metric measures review quality rather than file
+selection.
+
+Outputs land in the experiment directory:
+
+- `mutant-outcomes.csv` -- one row per mutant/method pair
+- `benchmark-summary.csv` / `.json` / `.tex` -- detection rate per method
+- `unreachable.json` -- repositories that yielded no valid mutant
+
+See [docs/mutation-benchmark-design.md](./docs/mutation-benchmark-design.md) for
+the design rationale and the constraints it works around.
+
 ## Config
 
 You can add a `.repo-reviewer.toml` file to a reviewed repository to define:
@@ -138,6 +171,7 @@ You can add a `.repo-reviewer.toml` file to a reviewed repository to define:
 
 ## Roadmap
 
+- LLM-as-judge as a secondary scoring signal alongside keyword matching
 - Private repository support
 - Deployment-ready backend/frontend split
 - Historical run storage

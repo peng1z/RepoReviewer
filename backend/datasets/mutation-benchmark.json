@@ -1,0 +1,13 @@
+{
+  "name": "mutation-benchmark",
+  "provider": "openai",
+  "model": "openai/gpt-4.1-mini",
+  "methods": ["full", "single_agent", "no_context", "no_priority"],
+  "mutants_per_repo": 10,
+  "seed": 20260902,
+  "targets": [
+    { "github_url": "https://github.com/pallets/click", "label": "click", "include_tests": false },
+    { "github_url": "https://github.com/psf/requests", "label": "requests", "include_tests": false },
+    { "github_url": "https://github.com/encode/httpx", "label": "httpx", "include_tests": false }
+  ]
+}
