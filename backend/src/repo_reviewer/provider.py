@@ -10,6 +10,7 @@ from collections import deque
 
 import litellm
 from litellm import acompletion
+from pydantic import ValidationError
 
 from .models import ReviewComment
 
@@ -240,6 +241,40 @@ def coerce_comment_payload(payload) -> list[dict]:
             if isinstance(value, list):
                 return [item for item in value if isinstance(item, dict)]
     return []
+
+
+def build_comments(
+    items: list[dict],
+    *,
+    default_file: str | None = None,
+) -> tuple[list[ReviewComment], list[str]]:
+    """Validate findings one at a time, returning the good ones and why the rest went.
+
+    Validating the batch in a loop that lets an exception escape means a single
+    malformed finding discards every well-formed finding beside it. In the first
+    full benchmark run that cost three of four failed runs: the model returned
+    one finding without a `file` and the whole review was thrown away.
+
+    A missing `file` is repaired only when the request covered one known file.
+    In a multi-file pass the finding cannot be attributed to anything, and
+    guessing would put a real finding on the wrong file, so it is dropped.
+    """
+    comments: list[ReviewComment] = []
+    dropped: list[str] = []
+    for item in items:
+        if not isinstance(item, dict):
+            dropped.append(f"not an object ({type(item).__name__})")
+            continue
+        candidate = dict(item)
+        if not candidate.get("file") and default_file:
+            candidate["file"] = default_file
+        try:
+            comments.append(ReviewComment.model_validate(candidate))
+        except ValidationError as exc:
+            first = exc.errors()[0]
+            field = ".".join(str(part) for part in first.get("loc", ())) or "?"
+            dropped.append(f"{field}: {first.get('msg', 'invalid')}")
+    return comments, dropped
 
 
 def parse_json_response(text: str):

@@ -24,6 +24,7 @@ from .models import (
 )
 from .prompts import REVIEW_SYSTEM_PROMPT
 from .provider import (
+    build_comments,
     coerce_comment_payload,
     normalize_comments,
     parse_json_response,
@@ -353,13 +354,13 @@ async def single_agent_review(prepared: PreparedRun, context: ProjectContext) ->
         raw_comments = coerce_comment_payload(parse_json_response(response))
     except (ValueError, json.JSONDecodeError):
         raw_comments = []
-    comments: list[ReviewComment] = []
-    for item in raw_comments:
-        comment = ReviewComment.model_validate(item)
+    # This pass covers many files at once, so there is no file to fall back on
+    # and a finding without one is dropped rather than attributed by guesswork.
+    comments, _dropped = build_comments(raw_comments)
+    for comment in comments:
         path = prepared.workspace_dir / comment.file if comment.file else None
         if path and path.exists():
             comment.snippet = extract_snippet(path, comment.line, radius=6)
-        comments.append(comment)
     return comments
 
 
