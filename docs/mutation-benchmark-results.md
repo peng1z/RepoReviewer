@@ -1,7 +1,14 @@
 # Mutation Benchmark: First Full Run
 
-Run `mutation-benchmark-20260903-075030`. 3 hours 42 minutes, 116 scored
-mutant/method pairs, 4 errors (3.4%).
+Run `mutation-benchmark-20260903-075030`, against commit `6e80e99`. 3 hours
+42 minutes, 116 scored mutant/method pairs, 4 errors (3.4%).
+
+The commit matters: the numbers below predate the metric fixes this run
+prompted. The artifacts carry `matched_keywords` but not `file_lines` or
+`expected_by_chance`, which places them after the auditability changes and
+before the chance baseline. Re-running on a later commit will not reproduce
+the weak-hit rates, by design -- the narrowed keywords remove 13 of the 31
+weak hits reported here.
 
 | Setting | Value |
 |---|---|
