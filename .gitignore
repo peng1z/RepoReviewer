@@ -1,21 +1,60 @@
-.cache/
-.venv/
-.venv313/
+# --- Secrets -----------------------------------------------------------
+# Every .env variant is ignored; the checked-in template is the exception.
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# --- Python ------------------------------------------------------------
 __pycache__/
 .pycache/
-.DS_Store
-.pytest_cache/
 *.pyc
 *.pyo
 *.pyd
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.tox/
 .coverage
 .coverage.*
-*.egg-info/
+htmlcov/
+
+# Virtualenvs, including suffixed ones such as .venv313 or .venv-bench.
+.venv
+.venv*/
+venv/
+
+# --- Node / frontend ---------------------------------------------------
 node_modules/
 .next/
+.turbo/
+coverage/
+*.tsbuildinfo
+npm-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# --- Project artifacts -------------------------------------------------
+.cache/
 outputs/
-.env
 paper/
 
-# Frontend build artifacts
-*.tsbuildinfo
+# --- Editors -----------------------------------------------------------
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# --- OS ----------------------------------------------------------------
+.DS_Store
+.AppleDouble
+._*
+.Spotlight-V100
+.Trashes
+Thumbs.db
+Desktop.ini
