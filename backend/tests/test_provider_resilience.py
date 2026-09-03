@@ -13,6 +13,7 @@ def _reset_policy():
     provider._limiter = None
     provider._max_retries = None
     provider._retry_base = None
+    provider._timeout = None
 
 
 @pytest.mark.asyncio
@@ -161,3 +162,46 @@ def test_wrapped_payload_is_not_iterated_as_keys() -> None:
     """Iterating {"comments": [...]} yields the string "comments", not findings."""
     out = provider.coerce_comment_payload({"comments": [{"file": "a.py", "issue": "x"}]})
     assert out == [{"file": "a.py", "issue": "x"}]
+
+
+@pytest.mark.asyncio
+async def test_a_request_timeout_is_passed_to_the_provider(monkeypatch) -> None:
+    """A hung call must be abandoned; without this a pilot stalled for 18 minutes."""
+    provider.configure_llm(requests_per_minute=0, max_retries=0, request_timeout_seconds=42.0)
+    seen: dict = {}
+
+    async def capture(**kwargs):
+        seen.update(kwargs)
+
+        class R:
+            choices = [type("C", (), {"message": type("M", (), {"content": "[]"})()})()]
+
+        return R()
+
+    monkeypatch.setattr(provider, "acompletion", capture)
+    await provider.structured_completion(
+        provider="openrouter", model="openrouter/x", system_prompt="s", user_prompt="u"
+    )
+    assert seen["timeout"] == 42.0
+
+
+@pytest.mark.asyncio
+async def test_a_timeout_is_retried(monkeypatch) -> None:
+    provider.configure_llm(requests_per_minute=0, max_retries=2, retry_base_seconds=0.0)
+    attempts = {"n": 0}
+
+    async def slow_then_ok(**kwargs):
+        attempts["n"] += 1
+        if attempts["n"] == 1:
+            raise litellm.Timeout("timed out", model="m", llm_provider="openrouter")
+
+        class R:
+            choices = [type("C", (), {"message": type("M", (), {"content": "[]"})()})()]
+
+        return R()
+
+    monkeypatch.setattr(provider, "acompletion", slow_then_ok)
+    assert await provider.structured_completion(
+        provider="openrouter", model="openrouter/x", system_prompt="s", user_prompt="u"
+    ) == "[]"
+    assert attempts["n"] == 2

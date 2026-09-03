@@ -35,6 +35,9 @@ class Settings(BaseSettings):
     llm_requests_per_minute: int = 20
     llm_max_retries: int = 5
     llm_retry_base_seconds: float = 2.0
+    # Without a timeout a hung request blocks the whole run indefinitely;
+    # a pilot stalled for 18 minutes on one call before this was added.
+    llm_request_timeout_seconds: float = 180.0
 
 
 DEFAULT_REVIEWER_CONFIG: dict[str, Any] = {

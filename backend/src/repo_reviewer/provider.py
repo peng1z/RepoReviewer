@@ -80,6 +80,7 @@ def retry_after_seconds(exc: Exception) -> float | None:
 _limiter: RateLimiter | None = None
 _max_retries: int | None = None
 _retry_base: float | None = None
+_timeout: float | None = None
 
 
 def configure_llm(
@@ -87,20 +88,23 @@ def configure_llm(
     requests_per_minute: int | None = None,
     max_retries: int | None = None,
     retry_base_seconds: float | None = None,
+    request_timeout_seconds: float | None = None,
 ) -> None:
     """Override the pacing and retry policy (used by the benchmark and tests)."""
-    global _limiter, _max_retries, _retry_base
+    global _limiter, _max_retries, _retry_base, _timeout
     if requests_per_minute is not None:
         _limiter = RateLimiter(requests_per_minute)
     if max_retries is not None:
         _max_retries = max_retries
     if retry_base_seconds is not None:
         _retry_base = retry_base_seconds
+    if request_timeout_seconds is not None:
+        _timeout = request_timeout_seconds
 
 
-def _policy() -> tuple[RateLimiter, int, float]:
-    global _limiter, _max_retries, _retry_base
-    if _limiter is None or _max_retries is None or _retry_base is None:
+def _policy() -> tuple[RateLimiter, int, float, float]:
+    global _limiter, _max_retries, _retry_base, _timeout
+    if None in (_limiter, _max_retries, _retry_base, _timeout):
         from .config import Settings
 
         settings = Settings()
@@ -110,7 +114,9 @@ def _policy() -> tuple[RateLimiter, int, float]:
             _max_retries = settings.llm_max_retries
         if _retry_base is None:
             _retry_base = settings.llm_retry_base_seconds
-    return _limiter, _max_retries, _retry_base
+        if _timeout is None:
+            _timeout = settings.llm_request_timeout_seconds
+    return _limiter, _max_retries, _retry_base, _timeout
 
 
 MODEL_ALIASES = {
@@ -137,7 +143,7 @@ async def structured_completion(
     user_prompt: str,
 ) -> str:
     resolved_model = resolve_model(provider, model)
-    limiter, max_retries, retry_base = _policy()
+    limiter, max_retries, retry_base, timeout = _policy()
     messages = [
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": user_prompt},
@@ -150,6 +156,7 @@ async def structured_completion(
                 model=resolved_model,
                 messages=messages,
                 temperature=0.2,
+                timeout=timeout,
             )
         except RETRYABLE_ERRORS as exc:
             if attempt == max_retries:

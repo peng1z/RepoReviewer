@@ -83,9 +83,14 @@ def benchmark(
     workspace_root: str = typer.Option(".cache/repo-reviewer-benchmark", "--workspace-root", help="Scratch directory for cloned and mutated copies."),
     requests_per_minute: int | None = typer.Option(None, "--rpm", help="Cap LLM calls per minute (0 disables pacing)."),
     max_retries: int | None = typer.Option(None, "--max-retries", help="Retries for rate-limit and transient errors."),
+    request_timeout: float | None = typer.Option(None, "--request-timeout", help="Seconds before a single LLM call is abandoned."),
 ) -> None:
     """Inject known defects into real repositories and measure detection rates."""
-    configure_llm(requests_per_minute=requests_per_minute, max_retries=max_retries)
+    configure_llm(
+        requests_per_minute=requests_per_minute,
+        max_retries=max_retries,
+        request_timeout_seconds=request_timeout,
+    )
     experiment_dir, outcomes = run_benchmark_sync(
         Path(dataset), Path(output_root), Path(workspace_root)
     )
