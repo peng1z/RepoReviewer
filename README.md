@@ -156,6 +156,8 @@ Outputs land in the experiment directory:
 - `benchmark-summary.csv` / `.json` / `.tex` -- detection rate per method
 - `unreachable.json` -- repositories that yielded no valid mutant
 
+Results from the first full run, including the metric defects it exposed, are
+in [docs/mutation-benchmark-results.md](./docs/mutation-benchmark-results.md).
 See [docs/mutation-benchmark-design.md](./docs/mutation-benchmark-design.md) for
 the design rationale and the constraints it works around.
 
