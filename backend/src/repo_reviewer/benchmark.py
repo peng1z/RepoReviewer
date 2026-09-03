@@ -70,6 +70,9 @@ class MutantOutcome(BaseModel):
     matched_keywords: str = ""
     total_findings: int = 0
     findings_in_file: int = 0
+    #: Lines in the mutated file. Needed to work out how often a finding
+    #: would land in the tolerance window by chance alone.
+    file_lines: int = 0
 
 
 class BenchmarkError(BaseModel):
@@ -92,6 +95,13 @@ class MethodSummary(BaseModel):
     detection_rate: float
     weak_or_better_rate: float
     findings_per_mutant: float
+    #: How often a method this verbose would land inside the tolerance window
+    #: with no review skill at all.
+    expected_by_chance: float = 0.0
+    #: detection_rate / expected_by_chance. Reading detection_rate alone
+    #: rewards verbosity: a method reporting 15 findings per file has roughly
+    #: three times the chance of a lucky hit as one reporting 5.
+    lift_over_chance: float = 0.0
 
 
 class DatasetMismatch(RuntimeError):
@@ -212,6 +222,7 @@ def build_outcome(
     *,
     repo_name: str,
     method: str,
+    file_lines: int = 0,
 ) -> MutantOutcome:
     outcome, matched = score_mutant(mutant, comments)
     target_file = _normalize_path(mutant.file)
@@ -229,7 +240,17 @@ def build_outcome(
         matched_keywords=", ".join(find_matched_keywords(matched, mutant)) if matched else "",
         total_findings=len(comments),
         findings_in_file=sum(1 for c in comments if _normalize_path(c.file) == target_file),
+        file_lines=file_lines,
     )
+
+
+def chance_of_hit(findings_in_file: int, file_lines: int, *, line_tolerance: int = LINE_TOLERANCE) -> float:
+    """Probability that at least one of `findings_in_file` uniformly placed
+    findings falls within the tolerance window of the mutated line."""
+    if file_lines <= 0 or findings_in_file <= 0:
+        return 0.0
+    window = min(1.0, (2 * line_tolerance + 1) / file_lines)
+    return 1 - (1 - window) ** findings_in_file
 
 
 def summarize_outcomes(outcomes: list[MutantOutcome]) -> list[MethodSummary]:
@@ -244,6 +265,14 @@ def summarize_outcomes(outcomes: list[MutantOutcome]) -> list[MethodSummary]:
         weak = sum(1 for row in rows if row.outcome == "weak_hit")
         misses = sum(1 for row in rows if row.outcome == "miss")
         findings = sum(row.total_findings for row in rows)
+        measurable = [row for row in rows if row.file_lines > 0]
+        chance = (
+            sum(chance_of_hit(row.findings_in_file, row.file_lines) for row in measurable)
+            / len(measurable)
+            if measurable
+            else 0.0
+        )
+        detection = hits / scored if scored else 0.0
         summaries.append(
             MethodSummary(
                 method=method,
@@ -251,12 +280,49 @@ def summarize_outcomes(outcomes: list[MutantOutcome]) -> list[MethodSummary]:
                 hits=hits,
                 weak_hits=weak,
                 misses=misses,
-                detection_rate=round(hits / scored, 4) if scored else 0.0,
+                detection_rate=round(detection, 4),
                 weak_or_better_rate=round((hits + weak) / scored, 4) if scored else 0.0,
                 findings_per_mutant=round(findings / scored, 2) if scored else 0.0,
+                expected_by_chance=round(chance, 4),
+                lift_over_chance=round(detection / chance, 2) if chance else 0.0,
             )
         )
     return summaries
+
+
+class RepoMethodSummary(BaseModel):
+    repo_name: str
+    method: str
+    scored_mutants: int
+    hits: int
+    detection_rate: float
+
+
+def summarize_by_repo(outcomes: list[MutantOutcome]) -> list[RepoMethodSummary]:
+    """Per repository and method.
+
+    The first run's aggregate said no_context led on detection. Split by
+    repository it scored 0.70 on one and 0.00 on another, so the aggregate was
+    reporting a single repository rather than a property of the method. A
+    summary that cannot show that is misleading by omission.
+    """
+    grouped: dict[tuple[str, str], list[MutantOutcome]] = defaultdict(list)
+    for outcome in outcomes:
+        grouped[(outcome.repo_name, outcome.method)].append(outcome)
+
+    rows: list[RepoMethodSummary] = []
+    for (repo_name, method), items in sorted(grouped.items()):
+        hits = sum(1 for item in items if item.outcome == "hit")
+        rows.append(
+            RepoMethodSummary(
+                repo_name=repo_name,
+                method=method,
+                scored_mutants=len(items),
+                hits=hits,
+                detection_rate=round(hits / len(items), 4) if items else 0.0,
+            )
+        )
+    return rows
 
 
 def resolve_reviewable_files(
@@ -473,7 +539,13 @@ async def run_benchmark_dataset(
                     errors.append(error)
                     _append_jsonl(errors_log, error)
                     continue
-                outcome = build_outcome(mutant, comments, repo_name=repo_name, method=method)
+                outcome = build_outcome(
+                    mutant,
+                    comments,
+                    repo_name=repo_name,
+                    method=method,
+                    file_lines=_count_lines(mutated / mutant.file),
+                )
                 outcomes.append(outcome)
                 _append_jsonl(outcomes_log, outcome)
             shutil.rmtree(mutated, ignore_errors=True)
@@ -481,6 +553,7 @@ async def run_benchmark_dataset(
     export_outcomes(outcomes, experiment_dir / "mutant-outcomes.csv")
     summaries = summarize_outcomes(outcomes)
     export_summary(summaries, experiment_dir)
+    export_by_repo(summarize_by_repo(outcomes), experiment_dir / "benchmark-by-repo.csv")
     if unreachable:
         (experiment_dir / "unreachable.json").write_text(
             json.dumps(unreachable, indent=2), encoding="utf-8"
@@ -522,6 +595,13 @@ def _apply_target_config(repo_root: Path, target: BenchmarkTarget) -> None:
     (repo_root / ".repo-reviewer.toml").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
+def _count_lines(path: Path) -> int:
+    try:
+        return len(path.read_text(encoding="utf-8", errors="ignore").splitlines())
+    except OSError:
+        return 0
+
+
 def _append_jsonl(path: Path, record: BaseModel) -> None:
     with path.open("a", encoding="utf-8") as handle:
         handle.write(json.dumps(record.model_dump(mode="json")) + "\n")
@@ -542,6 +622,16 @@ def export_outcomes(outcomes: list[MutantOutcome], destination: Path) -> None:
         writer.writeheader()
         for outcome in outcomes:
             writer.writerow(outcome.model_dump())
+
+
+def export_by_repo(rows: list[RepoMethodSummary], destination: Path) -> None:
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    fieldnames = list(RepoMethodSummary.model_fields.keys())
+    with destination.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fieldnames)
+        writer.writeheader()
+        for row in rows:
+            writer.writerow(row.model_dump())
 
 
 def export_summary(summaries: list[MethodSummary], destination_root: Path) -> tuple[Path, Path, Path]:
@@ -566,11 +656,13 @@ def export_summary(summaries: list[MethodSummary], destination_root: Path) -> tu
 
 def _to_latex_table(summaries: list[MethodSummary]) -> str:
     header = (
-        "\\begin{tabular}{lrrrr}\n\\hline\n"
-        "Method & Mutants & Detection & Weak+ & Findings/mutant \\\\\n\\hline\n"
+        "\\begin{tabular}{lrrrrrr}\n\\hline\n"
+        "Method & Mutants & Detection & Chance & Lift & Weak+ & Findings/mutant \\\\\n"
+        "\\hline\n"
     )
     body = "".join(
         f"{s.method.replace('_', ' ')} & {s.scored_mutants} & {s.detection_rate:.3f} "
+        f"& {s.expected_by_chance:.3f} & {s.lift_over_chance:.2f} "
         f"& {s.weak_or_better_rate:.3f} & {s.findings_per_mutant:.2f} \\\\\n"
         for s in summaries
     )

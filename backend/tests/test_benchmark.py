@@ -746,3 +746,146 @@ async def test_resume_requires_a_dataset_file(tmp_path: Path) -> None:
             workspace_root=tmp_path / "work",
             resume_from=empty,
         )
+
+
+# --- methodology fixes from the first full run ---------------------------
+
+
+# Verbatim from the run: findings that matched widen_except only because the
+# words "except"/"exception" appear, while describing an unrelated assert bug.
+FALSE_WEAK_HITS = [
+    "Using `assert` for runtime validation of urllib3 version. When Python runs "
+    "with `-O` (optimize) flag, assertions are skipped.",
+    "Using assert statements for version validation. Assertions can be disabled "
+    "with the -O flag in production.",
+    "The `check_compatibility` function uses bare `assert` statements for version "
+    "validation. While wrapped in try/except, assertions are unreliable.",
+]
+
+# Also verbatim: these really are about the injected broad handler.
+TRUE_WEAK_HITS = [
+    "Bare `except Exception: pass` block silently swallows all errors. This "
+    "includes import errors and configuration issues.",
+    "Bare `except Exception: pass` silently swallows all exceptions, including "
+    "`SystemExit` and `KeyboardInterrupt`.",
+]
+
+
+def _except_mutant() -> Mutant:
+    from repo_reviewer.mutation import OPERATOR_KEYWORDS
+
+    return Mutant(
+        operator="widen_except",
+        file="pkg/core.py",
+        line=50,
+        original_line="except ValueError:",
+        mutated_line="except Exception:",
+        description="handler widened",
+        keywords=OPERATOR_KEYWORDS["widen_except"],
+    )
+
+
+@pytest.mark.parametrize("issue", FALSE_WEAK_HITS)
+def test_unrelated_findings_no_longer_match_on_except(issue: str) -> None:
+    """These scored as weak hits in the first run and inflated the rate."""
+    outcome, _ = score_mutant(_except_mutant(), [_comment("pkg/core.py", None, issue=issue)])
+    assert outcome == "miss", issue[:60]
+
+
+@pytest.mark.parametrize("issue", TRUE_WEAK_HITS)
+def test_genuine_findings_still_match(issue: str) -> None:
+    outcome, _ = score_mutant(_except_mutant(), [_comment("pkg/core.py", None, issue=issue)])
+    assert outcome == "weak_hit", issue[:60]
+
+
+def test_no_operator_keeps_a_neighbourhood_word() -> None:
+    """A keyword must name the defect, not the area of code it lives in."""
+    from repo_reviewer.mutation import OPERATOR_KEYWORDS
+
+    ubiquitous = {"except", "exception", "none", "null", "index", "edge case",
+                  "operator", "guard", "bare", "broad", "check"}
+    offenders = [
+        (op, kw) for op, kws in OPERATOR_KEYWORDS.items() for kw in kws if kw in ubiquitous
+    ]
+    assert offenders == []
+
+
+# --- chance baseline ------------------------------------------------------
+
+
+def test_chance_rises_with_verbosity() -> None:
+    """The reason raw detection_rate cannot be compared across methods."""
+    from repo_reviewer.benchmark import chance_of_hit
+
+    terse = chance_of_hit(findings_in_file=5, file_lines=200)
+    verbose = chance_of_hit(findings_in_file=15, file_lines=200)
+    assert verbose > terse * 2
+
+
+def test_chance_is_zero_without_findings_or_length() -> None:
+    from repo_reviewer.benchmark import chance_of_hit
+
+    assert chance_of_hit(0, 200) == 0.0
+    assert chance_of_hit(5, 0) == 0.0
+
+
+def test_chance_saturates_in_a_tiny_file() -> None:
+    from repo_reviewer.benchmark import chance_of_hit
+
+    assert chance_of_hit(3, 2) == pytest.approx(1.0)
+
+
+def test_summary_reports_lift_over_chance() -> None:
+    rows = [
+        MutantOutcome(repo_name="r", method="verbose", operator="off_by_one", file="a.py",
+                      line=10, outcome="hit", total_findings=15, findings_in_file=15,
+                      file_lines=200),
+        MutantOutcome(repo_name="r", method="verbose", operator="off_by_one", file="a.py",
+                      line=20, outcome="miss", total_findings=15, findings_in_file=15,
+                      file_lines=200),
+    ]
+    summary = summarize_outcomes(rows)[0]
+    assert summary.detection_rate == 0.5
+    assert 0 < summary.expected_by_chance < 0.5
+    assert summary.lift_over_chance == pytest.approx(
+        summary.detection_rate / summary.expected_by_chance, rel=0.02
+    )
+
+
+def test_lift_is_zero_when_chance_cannot_be_computed() -> None:
+    rows = [MutantOutcome(repo_name="r", method="m", operator="off_by_one", file="a.py",
+                          line=1, outcome="hit", file_lines=0)]
+    assert summarize_outcomes(rows)[0].lift_over_chance == 0.0
+
+
+# --- per-repo breakdown ---------------------------------------------------
+
+
+def test_by_repo_exposes_variance_the_aggregate_hides() -> None:
+    """The real case: one method looked best overall on one repo's strength."""
+    from repo_reviewer.benchmark import summarize_by_repo
+
+    rows = []
+    for outcome in ["hit", "hit", "hit"]:
+        rows.append(MutantOutcome(repo_name="o/good", method="m", operator="off_by_one",
+                                  file="a.py", line=1, outcome=outcome))
+    for outcome in ["miss", "miss", "miss"]:
+        rows.append(MutantOutcome(repo_name="o/bad", method="m", operator="off_by_one",
+                                  file="a.py", line=1, outcome=outcome))
+
+    assert summarize_outcomes(rows)[0].detection_rate == 0.5  # aggregate looks middling
+    per_repo = {r.repo_name: r.detection_rate for r in summarize_by_repo(rows)}
+    assert per_repo == {"o/good": 1.0, "o/bad": 0.0}  # the split tells the real story
+
+
+@pytest.mark.asyncio
+async def test_run_exports_the_per_repo_table(tmp_path: Path, monkeypatch) -> None:
+    async def healthy(*, repo_root, repo_name, method, dataset, target):
+        return [_comment("pkg/core.py", 4)]
+
+    experiment_dir, _ = await _run_with_runner(
+        tmp_path, monkeypatch, healthy, methods=["full"], mutants=2
+    )
+    table = experiment_dir / "benchmark-by-repo.csv"
+    assert table.exists()
+    assert "pallets/click" in table.read_text(encoding="utf-8")

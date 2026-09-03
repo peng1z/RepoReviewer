@@ -45,28 +45,37 @@ class _Candidate:
     description: str
 
 
-# Keywords a reviewer plausibly uses when describing each defect class. Matching is
-# substring-based and lowercased, so short fragments like "off-by" are intentional.
+# Phrases specific enough that their presence implies the finding is about this
+# defect class, not merely about the same area of code.
+#
+# The first benchmark run showed why that bar matters. "except" and "exception"
+# each fired on 11 weak hits, and sampling them found several that described an
+# unrelated `assert` problem in a file that happened to contain a try/except.
+# Across all operators, 8 of 31 weak hits matched only on such ubiquitous words,
+# inflating weak_or_better_rate by roughly seven points. Bare "except",
+# "exception", "none", "index", "edge case" and "operator" are deliberately
+# absent below; they name the neighbourhood, not the defect.
 OPERATOR_KEYWORDS: dict[MutationOperator, tuple[str, ...]] = {
     "off_by_one": (
         "off-by-one", "off by one", "boundary", "bounds", "inclusive", "exclusive",
-        "fencepost", "comparison operator", "index", "edge case",
+        "fencepost", "comparison operator", "one too", "boundary value",
     ),
     "negate_condition": (
-        "negat", "inverted", "inverse", "backwards", "opposite", "condition is",
-        "wrong condition", "logic error", "reversed",
+        "negat", "inverted", "inverse", "backwards", "opposite",
+        "wrong condition", "condition is reversed", "reversed", "logic is inverted",
     ),
     "swap_operator": (
-        "operator", "arithmetic", "addition", "subtraction", "subtract",
-        "should be `and`", "should be `or`", "boolean logic", "wrong sign",
+        "arithmetic", "addition", "subtraction", "subtract",
+        "should be `and`", "should be `or`", "should be and", "should be or",
+        "boolean logic", "wrong sign", "wrong operator",
     ),
     "invert_none_check": (
-        "none", "null", "guard", "nonetype", "attributeerror", "inverted check",
-        "is not none", "missing check",
+        "null check", "none check", "nonetype", "attributeerror", "inverted check",
+        "is not none", "is none", "missing check", "null guard", "none guard",
     ),
     "widen_except": (
-        "except", "exception", "broad", "bare", "swallow", "silently",
-        "catch-all", "too general", "masks",
+        "broad except", "bare except", "except exception", "swallow", "silently",
+        "catch-all", "too general", "masks the", "overly broad", "catches all",
     ),
 }
 
