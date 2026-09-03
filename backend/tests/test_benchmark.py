@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 import pytest
@@ -425,3 +426,187 @@ async def test_clone_runs_off_the_event_loop(tmp_path: Path, monkeypatch) -> Non
     await releaser
 
     assert released_in_time == [True]
+
+
+# --- resilience -----------------------------------------------------------
+
+
+async def _run_with_runner(tmp_path: Path, monkeypatch, runner, *, methods, mutants=2):
+    source_repo = tmp_path / "source"
+    source_repo.mkdir()
+    _write_repo(source_repo)
+
+    def fake_clone(url: str, destination: Path) -> Path:
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        if not destination.exists():
+            import shutil
+            shutil.copytree(source_repo, destination)
+        return destination
+
+    monkeypatch.setattr(bench, "clone_repo", fake_clone)
+    dataset = BenchmarkDataset(
+        name="resilience",
+        methods=methods,
+        mutants_per_repo=mutants,
+        targets=[BenchmarkTarget(github_url="https://github.com/pallets/click")],
+    )
+    return await run_benchmark_dataset(
+        dataset,
+        output_root=tmp_path / "out",
+        workspace_root=tmp_path / "work",
+        review_runner=runner,
+    )
+
+
+@pytest.mark.asyncio
+async def test_a_failing_method_is_recorded_without_ending_the_run(tmp_path: Path, monkeypatch) -> None:
+    async def half_broken(*, repo_root, repo_name, method, dataset, target):
+        if method == "single_agent":
+            raise RuntimeError("provider exploded")
+        return [_comment("pkg/core.py", 4)]
+
+    experiment_dir, outcomes = await _run_with_runner(
+        tmp_path, monkeypatch, half_broken, methods=["full", "single_agent"]
+    )
+
+    # The healthy method still produced scored outcomes.
+    assert {o.method for o in outcomes} == {"full"}
+    errors = json.loads((experiment_dir / "errors.json").read_text(encoding="utf-8"))
+    assert len(errors) == 2
+    assert all(e["method"] == "single_agent" for e in errors)
+    assert "provider exploded" in errors[0]["error"]
+
+
+@pytest.mark.asyncio
+async def test_failures_are_excluded_from_the_rates(tmp_path: Path, monkeypatch) -> None:
+    """A method that errors must not be scored as if it missed."""
+    async def half_broken(*, repo_root, repo_name, method, dataset, target):
+        if method == "single_agent":
+            raise RuntimeError("boom")
+        return [_comment("pkg/core.py", 4)]
+
+    _, outcomes = await _run_with_runner(
+        tmp_path, monkeypatch, half_broken, methods=["full", "single_agent"]
+    )
+    assert [s.method for s in summarize_outcomes(outcomes)] == ["full"]
+
+
+@pytest.mark.asyncio
+async def test_results_are_written_incrementally(tmp_path: Path, monkeypatch) -> None:
+    """A late crash must not take the earlier results with it."""
+    seen: list[str] = []
+
+    async def crash_on_last(*, repo_root, repo_name, method, dataset, target):
+        seen.append(method)
+        if len(seen) >= 3:
+            raise RuntimeError("late failure")
+        return [_comment("pkg/core.py", 4)]
+
+    experiment_dir, outcomes = await _run_with_runner(
+        tmp_path, monkeypatch, crash_on_last, methods=["full", "single_agent"]
+    )
+
+    lines = (experiment_dir / "mutant-outcomes.jsonl").read_text(encoding="utf-8").strip().splitlines()
+    assert len(lines) == 2, "results written before the failure should survive it"
+    assert json.loads(lines[0])["method"] == "full"
+    assert (experiment_dir / "errors.jsonl").exists()
+
+
+# --- auditable weak hits (B) ---------------------------------------------
+
+
+def test_outcome_records_why_a_weak_hit_matched() -> None:
+    comment = _comment("pkg/core.py", None, issue="Possible off-by-one at the boundary")
+    outcome = build_outcome(_mutant(), [comment], repo_name="r", method="full")
+    assert outcome.outcome == "weak_hit"
+    assert "off-by-one" in outcome.matched_keywords
+    assert "boundary" in outcome.matched_keywords
+
+
+def test_outcome_records_the_suggestion_that_triggered_the_match() -> None:
+    """A keyword can match on the suggestion, which was previously not stored."""
+    comment = _comment("pkg/core.py", None, issue="Unclear", suggestion="Check the boundary")
+    outcome = build_outcome(_mutant(), [comment], repo_name="r", method="full")
+    assert outcome.outcome == "weak_hit"
+    assert outcome.matched_suggestion == "Check the boundary"
+    assert "boundary" in outcome.matched_keywords
+
+
+def test_a_miss_records_no_justification() -> None:
+    outcome = build_outcome(_mutant(), [_comment("other.py", 3)], repo_name="r", method="full")
+    assert outcome.outcome == "miss"
+    assert outcome.matched_keywords == ""
+    assert outcome.matched_suggestion is None
+
+
+def test_matched_keywords_are_exported() -> None:
+    from repo_reviewer.benchmark import MutantOutcome as MO
+
+    assert "matched_keywords" in MO.model_fields
+    assert "matched_suggestion" in MO.model_fields
+
+
+# --- file-selection steering (A) -----------------------------------------
+
+
+def _write_repo_with_examples(root: Path) -> None:
+    for rel in ["examples/demo.py", "examples/other.py", "src/lib/core.py", "src/lib/util.py"]:
+        path = root / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(SAMPLE, encoding="utf-8")
+    (root / "README.md").write_text("# demo\n", encoding="utf-8")
+
+
+def test_without_ignore_globs_examples_crowd_out_the_source() -> None:
+    """Documents the bias the fix addresses: same depth, alphabetical order."""
+    import tempfile
+
+    root = Path(tempfile.mkdtemp())
+    _write_repo_with_examples(root)
+    files = resolve_reviewable_files(root, include_tests=False, max_file_bytes=40_000, max_files=2)
+    sources = [f for f in files if f.endswith(".py")]
+    assert sources, files
+    assert all(f.startswith("examples/") for f in sources), files
+
+
+def test_ignore_globs_move_selection_onto_the_source_tree(tmp_path: Path) -> None:
+    _write_repo_with_examples(tmp_path)
+    target = BenchmarkTarget(
+        github_url="https://github.com/o/r", max_files=2, ignore_globs=["examples/**"]
+    )
+    bench._apply_target_config(tmp_path, target)
+
+    files = resolve_reviewable_files(tmp_path, include_tests=False, max_file_bytes=40_000, max_files=2)
+    sources = [f for f in files if f.endswith(".py")]
+    assert sources, f"the source tree should still yield python files: {files}"
+    assert all(f.startswith("src/") for f in sources), files
+
+
+def test_ignore_globs_also_steer_the_mutants(tmp_path: Path) -> None:
+    _write_repo_with_examples(tmp_path)
+    target = BenchmarkTarget(
+        github_url="https://github.com/o/r", max_files=4, ignore_globs=["examples/**"]
+    )
+    bench._apply_target_config(tmp_path, target)
+    dataset = BenchmarkDataset(name="d", mutants_per_repo=5, targets=[target])
+
+    mutants = plan_mutants(tmp_path, target, dataset)
+    assert mutants
+    assert not any(m.file.startswith("examples/") for m in mutants), [m.file for m in mutants]
+
+
+def test_target_config_preserves_the_default_ignores(tmp_path: Path) -> None:
+    _write_repo_with_examples(tmp_path)
+    target = BenchmarkTarget(github_url="https://github.com/o/r", ignore_globs=["examples/**"])
+    bench._apply_target_config(tmp_path, target)
+    from repo_reviewer.config import load_repo_config
+
+    globs = load_repo_config(tmp_path).data["ignore_globs"]
+    assert "examples/**" in globs
+    assert ".git/**" in globs, "default ignores must not be dropped"
+
+
+def test_no_config_is_written_when_no_globs_are_given(tmp_path: Path) -> None:
+    _write_repo_with_examples(tmp_path)
+    bench._apply_target_config(tmp_path, BenchmarkTarget(github_url="https://github.com/o/r"))
+    assert not (tmp_path / ".repo-reviewer.toml").exists()

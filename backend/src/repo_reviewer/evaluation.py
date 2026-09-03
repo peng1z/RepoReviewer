@@ -23,7 +23,12 @@ from .models import (
     SkippedFile,
 )
 from .prompts import REVIEW_SYSTEM_PROMPT
-from .provider import normalize_comments, parse_json_response, structured_completion
+from .provider import (
+    coerce_comment_payload,
+    normalize_comments,
+    parse_json_response,
+    structured_completion,
+)
 from .repository import extract_snippet
 from .workflow import cloner_agent, context_agent, review_agent, summary_agent
 
@@ -345,7 +350,7 @@ async def single_agent_review(prepared: PreparedRun, context: ProjectContext) ->
         ),
     )
     try:
-        raw_comments = parse_json_response(response)
+        raw_comments = coerce_comment_payload(parse_json_response(response))
     except (ValueError, json.JSONDecodeError):
         raw_comments = []
     comments: list[ReviewComment] = []

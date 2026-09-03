@@ -10,7 +10,12 @@ from .config import Settings, load_repo_config
 from .github_client import checkout_pr_head, clone_repo, fetch_pr_changed_files, parse_github_url
 from .models import ProgressEvent, ProjectContext, ReviewComment, ReviewRequest, ReviewState, ReviewSummary, SkippedFile
 from .prompts import CONTEXT_SYSTEM_PROMPT, REVIEW_SYSTEM_PROMPT, SUMMARY_SYSTEM_PROMPT
-from .provider import normalize_comments, parse_json_response, structured_completion
+from .provider import (
+    coerce_comment_payload,
+    normalize_comments,
+    parse_json_response,
+    structured_completion,
+)
 from .repository import collect_repo_files, detect_key_files, extract_snippet, prioritize_files
 
 
@@ -148,7 +153,7 @@ async def review_agent(state: ReviewState, progress: ProgressCallback | None = N
             ),
         )
         try:
-            raw_comments = parse_json_response(response)
+            raw_comments = coerce_comment_payload(parse_json_response(response))
         except (ValueError, json.JSONDecodeError):
             raw_comments = []
         for item in raw_comments:

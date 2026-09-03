@@ -30,6 +30,14 @@ class Settings(BaseSettings):
     groq_api_key: str | None = None
     host: str = "127.0.0.1"
     port: int = 8000
+    # OpenRouter allows 20 requests/minute on free models; pacing locally is
+    # cheaper than absorbing 429s and burning the daily quota on retries.
+    llm_requests_per_minute: int = 20
+    llm_max_retries: int = 5
+    llm_retry_base_seconds: float = 2.0
+    # Without a timeout a hung request blocks the whole run indefinitely;
+    # a pilot stalled for 18 minutes on one call before this was added.
+    llm_request_timeout_seconds: float = 180.0
 
 
 DEFAULT_REVIEWER_CONFIG: dict[str, Any] = {

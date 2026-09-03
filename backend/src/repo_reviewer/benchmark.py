@@ -34,6 +34,11 @@ class BenchmarkTarget(BaseModel):
     include_tests: bool = False
     max_files: int = 30
     max_file_bytes: int = 40_000
+    #: Extra ignore patterns written into the clone as .repo-reviewer.toml.
+    #: prioritize_files() orders same-depth sources alphabetically, so on click
+    #: every slot went to examples/ and src/click was never reviewed. Reviewing
+    #: sample scripts is not representative of reviewing library code.
+    ignore_globs: list[str] = Field(default_factory=list)
 
 
 class BenchmarkDataset(BaseModel):
@@ -61,8 +66,21 @@ class MutantOutcome(BaseModel):
     matched_file: str | None = None
     matched_line: int | None = None
     matched_issue: str | None = None
+    matched_suggestion: str | None = None
+    matched_keywords: str = ""
     total_findings: int = 0
     findings_in_file: int = 0
+
+
+class BenchmarkError(BaseModel):
+    """A mutant/method pair that could not be scored. Excluded from all rates."""
+
+    repo_name: str
+    method: str
+    operator: str
+    file: str
+    line: int
+    error: str
 
 
 class MethodSummary(BaseModel):
@@ -95,9 +113,18 @@ def _normalize_path(value: str | None) -> str:
     return text.lstrip("/")
 
 
-def _mentions_defect(comment: ReviewComment, mutant: Mutant) -> bool:
+def find_matched_keywords(comment: ReviewComment, mutant: Mutant) -> list[str]:
+    """Which of the operator's keywords appear in this finding's text.
+
+    Recorded on every outcome so a weak hit can be justified after the fact.
+    A rate nobody can audit is not defensible.
+    """
     haystack = f"{comment.issue} {comment.suggestion}".lower()
-    return any(keyword in haystack for keyword in mutant.keywords)
+    return [keyword for keyword in mutant.keywords if keyword in haystack]
+
+
+def _mentions_defect(comment: ReviewComment, mutant: Mutant) -> bool:
+    return bool(find_matched_keywords(comment, mutant))
 
 
 def score_mutant(
@@ -144,6 +171,8 @@ def build_outcome(
         matched_file=matched.file if matched else None,
         matched_line=matched.line if matched else None,
         matched_issue=matched.issue if matched else None,
+        matched_suggestion=matched.suggestion if matched else None,
+        matched_keywords=", ".join(find_matched_keywords(matched, mutant)) if matched else "",
         total_findings=len(comments),
         findings_in_file=sum(1 for c in comments if _normalize_path(c.file) == target_file),
     )
@@ -256,17 +285,31 @@ async def pipeline_review_runner(
         include_tests=target.include_tests,
     )
 
-    state = ReviewState(request=request, workspace_dir=str(repo_root), repo_name=repo_name)
-    state = await context_agent(state)
-    assert state.project_context is not None
-
     if method == "no_context":
-        state.project_context = ProjectContext(
-            readme_summary="ContextAgent disabled for ablation.",
-            folder_summary="ContextAgent disabled for ablation.",
-            key_files=[],
-            architecture_notes=[],
+        # Running ContextAgent only to throw its output away would spend a call
+        # per mutant and make the ablation impure. The file list it also
+        # produces is derivable without an LLM.
+        state = ReviewState(
+            request=request,
+            workspace_dir=str(repo_root),
+            repo_name=repo_name,
+            files_to_review=resolve_reviewable_files(
+                repo_root,
+                include_tests=target.include_tests,
+                max_file_bytes=target.max_file_bytes,
+                max_files=target.max_files,
+            ),
+            project_context=ProjectContext(
+                readme_summary="ContextAgent disabled for ablation.",
+                folder_summary="ContextAgent disabled for ablation.",
+                key_files=[],
+                architecture_notes=[],
+            ),
         )
+    else:
+        state = ReviewState(request=request, workspace_dir=str(repo_root), repo_name=repo_name)
+        state = await context_agent(state)
+    assert state.project_context is not None
 
     if method == "single_agent":
         prepared = PreparedRun(
@@ -301,7 +344,13 @@ async def run_benchmark_dataset(
     )
 
     outcomes: list[MutantOutcome] = []
+    errors: list[BenchmarkError] = []
     unreachable: list[dict[str, str]] = []
+    # Appended to as results arrive. A run can take over an hour against a
+    # rate-limited provider, and losing all of it to a late failure is worse
+    # than the cost of writing each row twice.
+    outcomes_log = experiment_dir / "mutant-outcomes.jsonl"
+    errors_log = experiment_dir / "errors.jsonl"
 
     for target in dataset.targets:
         parsed = parse_github_url(target.github_url)
@@ -314,6 +363,7 @@ async def run_benchmark_dataset(
         # off the event loop so this coroutine stays usable from a server.
         await asyncio.to_thread(clone_repo, target.github_url, pristine)
 
+        _apply_target_config(pristine, target)
         mutants = plan_mutants(pristine, target, dataset)
         if not mutants:
             unreachable.append(
@@ -330,16 +380,29 @@ async def run_benchmark_dataset(
             await asyncio.to_thread(_copy_tree, pristine, mutated)
             apply_mutant(mutated, mutant)
             for method in dataset.methods:
-                comments = await review_runner(
-                    repo_root=mutated,
-                    repo_name=repo_name,
-                    method=method,
-                    dataset=dataset,
-                    target=target,
-                )
-                outcomes.append(
-                    build_outcome(mutant, comments, repo_name=repo_name, method=method)
-                )
+                try:
+                    comments = await review_runner(
+                        repo_root=mutated,
+                        repo_name=repo_name,
+                        method=method,
+                        dataset=dataset,
+                        target=target,
+                    )
+                except Exception as exc:  # noqa: BLE001 - one failure must not end the run
+                    error = BenchmarkError(
+                        repo_name=repo_name,
+                        method=method,
+                        operator=mutant.operator,
+                        file=mutant.file,
+                        line=mutant.line,
+                        error=f"{type(exc).__name__}: {exc}",
+                    )
+                    errors.append(error)
+                    _append_jsonl(errors_log, error)
+                    continue
+                outcome = build_outcome(mutant, comments, repo_name=repo_name, method=method)
+                outcomes.append(outcome)
+                _append_jsonl(outcomes_log, outcome)
             shutil.rmtree(mutated, ignore_errors=True)
 
     export_outcomes(outcomes, experiment_dir / "mutant-outcomes.csv")
@@ -349,7 +412,33 @@ async def run_benchmark_dataset(
         (experiment_dir / "unreachable.json").write_text(
             json.dumps(unreachable, indent=2), encoding="utf-8"
         )
+    if errors:
+        (experiment_dir / "errors.json").write_text(
+            json.dumps([e.model_dump() for e in errors], indent=2), encoding="utf-8"
+        )
     return experiment_dir, outcomes
+
+
+def _apply_target_config(repo_root: Path, target: BenchmarkTarget) -> None:
+    """Write the target's ignore patterns into the clone.
+
+    Uses the product's own .repo-reviewer.toml extension point, so mutation
+    planning and the review agents resolve the identical file list rather than
+    two independently computed ones.
+    """
+    if not target.ignore_globs:
+        return
+    config = load_repo_config(repo_root)
+    globs = list(config.data["ignore_globs"]) + list(target.ignore_globs)
+    lines = ["ignore_globs = ["]
+    lines += [f'  "{glob}",' for glob in globs]
+    lines.append("]")
+    (repo_root / ".repo-reviewer.toml").write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def _append_jsonl(path: Path, record: BaseModel) -> None:
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(record.model_dump(mode="json")) + "\n")
 
 
 def _copy_tree(source: Path, destination: Path) -> None:
