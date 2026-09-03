@@ -205,3 +205,75 @@ async def test_a_timeout_is_retried(monkeypatch) -> None:
         provider="openrouter", model="openrouter/x", system_prompt="s", user_prompt="u"
     ) == "[]"
     assert attempts["n"] == 2
+
+
+# --- malformed findings must not discard the whole review -----------------
+
+# The shape the model actually returned in the first full benchmark run: every
+# field present except `file`. It raised ValidationError and took the entire
+# review with it, three times out of four failed runs.
+MISSING_FILE = {
+    "line": 105,
+    "severity": "medium",
+    "issue": "Magic number should be extracted to a named constant.",
+    "suggestion": "Introduce a module-level constant.",
+}
+WELL_FORMED = {
+    "file": "pkg/core.py",
+    "line": 12,
+    "severity": "high",
+    "issue": "Off-by-one in the loop bound.",
+    "suggestion": "Use <= instead of <.",
+}
+
+
+def test_one_bad_finding_no_longer_discards_the_good_ones() -> None:
+    comments, dropped = provider.build_comments([WELL_FORMED, MISSING_FILE, WELL_FORMED])
+    assert len(comments) == 2
+    assert len(dropped) == 1
+    assert "file" in dropped[0]
+
+
+def test_missing_file_is_repaired_when_one_file_was_reviewed() -> None:
+    """review_agent sends a single file, so the finding can only belong to it."""
+    comments, dropped = provider.build_comments([MISSING_FILE], default_file="pkg/core.py")
+    assert dropped == []
+    assert comments[0].file == "pkg/core.py"
+    assert comments[0].line == 105
+
+
+def test_missing_file_is_dropped_when_many_files_were_reviewed() -> None:
+    """Guessing would attach a real finding to the wrong file."""
+    comments, dropped = provider.build_comments([MISSING_FILE])
+    assert comments == []
+    assert len(dropped) == 1
+
+
+def test_a_present_file_is_never_overwritten_by_the_default() -> None:
+    comments, _ = provider.build_comments([WELL_FORMED], default_file="other.py")
+    assert comments[0].file == "pkg/core.py"
+
+
+@pytest.mark.parametrize(
+    "item",
+    [
+        "a bare string",
+        42,
+        None,
+        {"file": "a.py", "severity": "medium", "suggestion": "x"},          # no issue
+        {"file": "a.py", "severity": "catastrophic", "issue": "x", "suggestion": "y"},
+    ],
+)
+def test_entries_that_cannot_be_repaired_are_dropped(item) -> None:
+    comments, dropped = provider.build_comments([item], default_file="a.py")
+    assert comments == []
+    assert len(dropped) == 1
+
+
+def test_dropped_reasons_name_the_offending_field() -> None:
+    _, dropped = provider.build_comments([{"file": "a.py", "issue": "x", "suggestion": "y"}])
+    assert "severity" in dropped[0]
+
+
+def test_empty_input_is_not_an_error() -> None:
+    assert provider.build_comments([]) == ([], [])

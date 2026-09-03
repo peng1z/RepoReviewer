@@ -11,6 +11,7 @@ from .github_client import checkout_pr_head, clone_repo, fetch_pr_changed_files,
 from .models import ProgressEvent, ProjectContext, ReviewComment, ReviewRequest, ReviewState, ReviewSummary, SkippedFile
 from .prompts import CONTEXT_SYSTEM_PROMPT, REVIEW_SYSTEM_PROMPT, SUMMARY_SYSTEM_PROMPT
 from .provider import (
+    build_comments,
     coerce_comment_payload,
     normalize_comments,
     parse_json_response,
@@ -156,14 +157,18 @@ async def review_agent(state: ReviewState, progress: ProgressCallback | None = N
             raw_comments = coerce_comment_payload(parse_json_response(response))
         except (ValueError, json.JSONDecodeError):
             raw_comments = []
-        for item in raw_comments:
-            comment = ReviewComment.model_validate(item)
+        # Only one file was sent, so a finding that omits `file` belongs to it.
+        parsed, dropped = build_comments(raw_comments, default_file=file_name)
+        for comment in parsed:
             comment.snippet = extract_snippet(path, comment.line, radius=6)
-            comments.append(comment)
+        comments.extend(parsed)
         percent = 35 + int(index / total * 40)
+        note = f"Reviewed {file_name}"
+        if dropped:
+            note += f" ({len(dropped)} malformed finding(s) skipped: {dropped[0]})"
         await emit(
             progress,
-            ProgressEvent(stage="review", message=f"Reviewed {file_name}", percent=min(percent, 75)),
+            ProgressEvent(stage="review", message=note, percent=min(percent, 75)),
         )
     state.comments = comments
     return state
