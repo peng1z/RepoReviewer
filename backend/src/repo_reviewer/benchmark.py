@@ -94,6 +94,60 @@ class MethodSummary(BaseModel):
     findings_per_mutant: float
 
 
+class DatasetMismatch(RuntimeError):
+    """The run being resumed was produced by a different dataset."""
+
+
+def completed_units(experiment_dir: Path) -> set[tuple]:
+    """Mutant/method pairs already scored in this experiment directory.
+
+    Only successful outcomes count. Previously failed pairs are retried: a
+    failure is usually a rate limit or a timeout, it is excluded from the rates
+    anyway, and retrying it can only widen coverage.
+    """
+    units: set[tuple] = set()
+    log = experiment_dir / "mutant-outcomes.jsonl"
+    if not log.exists():
+        return units
+    for line in log.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        row = json.loads(line)
+        units.add(_unit_key(row["repo_name"], row["operator"], row["file"], row["line"], row["method"]))
+    return units
+
+
+def _unit_key(repo_name: str, operator: str, file: str, line: int, method: str) -> tuple:
+    return (repo_name, operator, file, int(line), method)
+
+
+def _load_jsonl(path: Path, model):
+    if not path.exists():
+        return []
+    records = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if line.strip():
+            records.append(model.model_validate_json(line))
+    return records
+
+
+def _assert_same_dataset(experiment_dir: Path, dataset: BenchmarkDataset) -> None:
+    """Refuse to append results produced under a different configuration.
+
+    Mixing runs from two datasets would corrupt the metrics silently, which is
+    far worse than repeating the work.
+    """
+    stored = experiment_dir / "dataset.json"
+    if not stored.exists():
+        raise DatasetMismatch(f"{experiment_dir} has no dataset.json to resume from")
+    previous = BenchmarkDataset.model_validate_json(stored.read_text(encoding="utf-8"))
+    if previous.model_dump(mode="json") != dataset.model_dump(mode="json"):
+        raise DatasetMismatch(
+            f"{experiment_dir} was produced by a different dataset; "
+            "start a new run instead of resuming"
+        )
+
+
 def load_benchmark_dataset(path: Path) -> BenchmarkDataset:
     return BenchmarkDataset.model_validate(json.loads(path.read_text(encoding="utf-8")))
 
@@ -335,16 +389,27 @@ async def run_benchmark_dataset(
     output_root: Path,
     workspace_root: Path,
     review_runner: ReviewRunner = pipeline_review_runner,
+    resume_from: Path | None = None,
 ) -> tuple[Path, list[MutantOutcome]]:
-    stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
-    experiment_dir = output_root / f"{dataset.name}-{stamp}"
-    experiment_dir.mkdir(parents=True, exist_ok=True)
-    (experiment_dir / "dataset.json").write_text(
-        json.dumps(dataset.model_dump(mode="json"), indent=2), encoding="utf-8"
-    )
+    if resume_from is not None:
+        experiment_dir = resume_from
+        _assert_same_dataset(experiment_dir, dataset)
+        already = completed_units(experiment_dir)
+    else:
+        stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+        experiment_dir = output_root / f"{dataset.name}-{stamp}"
+        experiment_dir.mkdir(parents=True, exist_ok=True)
+        (experiment_dir / "dataset.json").write_text(
+            json.dumps(dataset.model_dump(mode="json"), indent=2), encoding="utf-8"
+        )
+        already = set()
 
-    outcomes: list[MutantOutcome] = []
-    errors: list[BenchmarkError] = []
+    outcomes: list[MutantOutcome] = _load_jsonl(
+        experiment_dir / "mutant-outcomes.jsonl", MutantOutcome
+    ) if resume_from is not None else []
+    errors: list[BenchmarkError] = _load_jsonl(
+        experiment_dir / "errors.jsonl", BenchmarkError
+    ) if resume_from is not None else []
     unreachable: list[dict[str, str]] = []
     # Appended to as results arrive. A run can take over an hour against a
     # rate-limited provider, and losing all of it to a late failure is worse
@@ -376,10 +441,18 @@ async def run_benchmark_dataset(
             continue
 
         for index, mutant in enumerate(mutants):
+            pending = [
+                method
+                for method in dataset.methods
+                if _unit_key(repo_name, mutant.operator, mutant.file, mutant.line, method)
+                not in already
+            ]
+            if not pending:
+                continue
             mutated = workspace_root / "mutated" / f"{slug}-{index}"
             await asyncio.to_thread(_copy_tree, pristine, mutated)
             apply_mutant(mutated, mutant)
-            for method in dataset.methods:
+            for method in pending:
                 try:
                     comments = await review_runner(
                         repo_root=mutated,
@@ -412,10 +485,23 @@ async def run_benchmark_dataset(
         (experiment_dir / "unreachable.json").write_text(
             json.dumps(unreachable, indent=2), encoding="utf-8"
         )
+    succeeded = {
+        _unit_key(o.repo_name, o.operator, o.file, o.line, o.method) for o in outcomes
+    }
+    errors = [
+        e
+        for e in errors
+        if _unit_key(e.repo_name, e.operator, e.file, e.line, e.method) not in succeeded
+    ]
+    errors_json = experiment_dir / "errors.json"
     if errors:
-        (experiment_dir / "errors.json").write_text(
+        errors_json.write_text(
             json.dumps([e.model_dump() for e in errors], indent=2), encoding="utf-8"
         )
+    else:
+        # A resume can clear every earlier failure; leaving the previous file in
+        # place would report failures that no longer exist.
+        errors_json.unlink(missing_ok=True)
     return experiment_dir, outcomes
 
 
@@ -495,8 +581,14 @@ def run_benchmark_sync(
     dataset_path: Path,
     output_root: Path,
     workspace_root: Path,
+    resume_from: Path | None = None,
 ) -> tuple[Path, list[MutantOutcome]]:
     dataset = load_benchmark_dataset(dataset_path)
     return asyncio.run(
-        run_benchmark_dataset(dataset, output_root=output_root, workspace_root=workspace_root)
+        run_benchmark_dataset(
+            dataset,
+            output_root=output_root,
+            workspace_root=workspace_root,
+            resume_from=resume_from,
+        )
     )

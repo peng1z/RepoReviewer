@@ -84,6 +84,7 @@ def benchmark(
     requests_per_minute: int | None = typer.Option(None, "--rpm", help="Cap LLM calls per minute (0 disables pacing)."),
     max_retries: int | None = typer.Option(None, "--max-retries", help="Retries for rate-limit and transient errors."),
     request_timeout: float | None = typer.Option(None, "--request-timeout", help="Seconds before a single LLM call is abandoned."),
+    resume: str | None = typer.Option(None, "--resume", help="Continue an existing experiment directory, skipping pairs already scored."),
 ) -> None:
     """Inject known defects into real repositories and measure detection rates."""
     configure_llm(
@@ -92,7 +93,8 @@ def benchmark(
         request_timeout_seconds=request_timeout,
     )
     experiment_dir, outcomes = run_benchmark_sync(
-        Path(dataset), Path(output_root), Path(workspace_root)
+        Path(dataset), Path(output_root), Path(workspace_root),
+        resume_from=Path(resume) if resume else None,
     )
     hits = sum(1 for outcome in outcomes if outcome.outcome == "hit")
     typer.echo(f"Benchmark complete: {len(outcomes)} scored mutant/method pairs, {hits} positional hits")

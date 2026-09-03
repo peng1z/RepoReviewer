@@ -610,3 +610,139 @@ def test_no_config_is_written_when_no_globs_are_given(tmp_path: Path) -> None:
     _write_repo_with_examples(tmp_path)
     bench._apply_target_config(tmp_path, BenchmarkTarget(github_url="https://github.com/o/r"))
     assert not (tmp_path / ".repo-reviewer.toml").exists()
+
+
+# --- resume (a 4.6h run must not restart from zero) -----------------------
+
+
+def _resume_dataset() -> BenchmarkDataset:
+    # Must match exactly what _run_with_runner builds, or the mismatch guard
+    # rejects the resume -- which it did, the first time this was written.
+    return BenchmarkDataset(
+        name="resilience",
+        methods=["full", "single_agent"],
+        mutants_per_repo=2,
+        targets=[BenchmarkTarget(github_url="https://github.com/pallets/click")],
+    )
+
+
+@pytest.mark.asyncio
+async def test_resume_skips_pairs_already_scored(tmp_path: Path, monkeypatch) -> None:
+    calls: list[tuple[str, str]] = []
+
+    async def counting(*, repo_root, repo_name, method, dataset, target):
+        calls.append((repo_name, method))
+        return [_comment("pkg/core.py", 4)]
+
+    experiment_dir, first = await _run_with_runner(
+        tmp_path, monkeypatch, counting, methods=["full", "single_agent"], mutants=2
+    )
+    assert len(first) == 4
+    first_round = len(calls)
+
+    _, second = await run_benchmark_dataset(
+        _resume_dataset(),
+        output_root=tmp_path / "out",
+        workspace_root=tmp_path / "work",
+        review_runner=counting,
+        resume_from=experiment_dir,
+    )
+    assert len(calls) == first_round, "nothing should have been re-reviewed"
+    assert len(second) == 4, "prior outcomes must be carried into the result"
+
+
+@pytest.mark.asyncio
+async def test_resume_finishes_the_pairs_that_are_missing(tmp_path: Path, monkeypatch) -> None:
+    """The realistic case: the process died partway through."""
+    seen: list[str] = []
+
+    async def dies_after_three(*, repo_root, repo_name, method, dataset, target):
+        seen.append(method)
+        if len(seen) > 3:
+            raise RuntimeError("killed")
+        return [_comment("pkg/core.py", 4)]
+
+    experiment_dir, partial = await _run_with_runner(
+        tmp_path, monkeypatch, dies_after_three, methods=["full", "single_agent"], mutants=2
+    )
+    assert len(partial) == 3
+
+    async def healthy(*, repo_root, repo_name, method, dataset, target):
+        return [_comment("pkg/core.py", 4)]
+
+    _, resumed = await run_benchmark_dataset(
+        _resume_dataset(),
+        output_root=tmp_path / "out",
+        workspace_root=tmp_path / "work",
+        review_runner=healthy,
+        resume_from=experiment_dir,
+    )
+    assert len(resumed) == 4
+    keys = {(o.operator, o.line, o.method) for o in resumed}
+    assert len(keys) == 4, "no duplicated units"
+
+
+@pytest.mark.asyncio
+async def test_resume_retries_a_previously_failed_pair(tmp_path: Path, monkeypatch) -> None:
+    async def one_bad_method(*, repo_root, repo_name, method, dataset, target):
+        if method == "single_agent":
+            raise RuntimeError("rate limited")
+        return [_comment("pkg/core.py", 4)]
+
+    experiment_dir, first = await _run_with_runner(
+        tmp_path, monkeypatch, one_bad_method, methods=["full", "single_agent"], mutants=2
+    )
+    assert {o.method for o in first} == {"full"}
+    assert (experiment_dir / "errors.json").exists()
+
+    async def healthy(*, repo_root, repo_name, method, dataset, target):
+        return [_comment("pkg/core.py", 4)]
+
+    _, resumed = await run_benchmark_dataset(
+        _resume_dataset(),
+        output_root=tmp_path / "out",
+        workspace_root=tmp_path / "work",
+        review_runner=healthy,
+        resume_from=experiment_dir,
+    )
+    assert {o.method for o in resumed} == {"full", "single_agent"}
+    # The stale error must not survive once the pair succeeds.
+    assert not (experiment_dir / "errors.json").exists() or json.loads(
+        (experiment_dir / "errors.json").read_text(encoding="utf-8")
+    ) == []
+
+
+@pytest.mark.asyncio
+async def test_resume_refuses_a_different_dataset(tmp_path: Path, monkeypatch) -> None:
+    """Appending results from another configuration would corrupt the metrics."""
+    async def healthy(*, repo_root, repo_name, method, dataset, target):
+        return []
+
+    experiment_dir, _ = await _run_with_runner(
+        tmp_path, monkeypatch, healthy, methods=["full", "single_agent"], mutants=2
+    )
+
+    changed = _resume_dataset()
+    changed.mutants_per_repo = 5
+
+    with pytest.raises(bench.DatasetMismatch):
+        await run_benchmark_dataset(
+            changed,
+            output_root=tmp_path / "out",
+            workspace_root=tmp_path / "work",
+            review_runner=healthy,
+            resume_from=experiment_dir,
+        )
+
+
+@pytest.mark.asyncio
+async def test_resume_requires_a_dataset_file(tmp_path: Path) -> None:
+    empty = tmp_path / "nothing"
+    empty.mkdir()
+    with pytest.raises(bench.DatasetMismatch):
+        await run_benchmark_dataset(
+            _resume_dataset(),
+            output_root=tmp_path / "out",
+            workspace_root=tmp_path / "work",
+            resume_from=empty,
+        )
