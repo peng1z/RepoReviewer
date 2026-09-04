@@ -11,7 +11,7 @@ from .benchmark import run_benchmark_sync
 from .provider import configure_llm
 from .evaluation import run_evaluation_sync
 from .models import ReviewRequest
-from .provider import env_hint_for_provider, resolve_model
+from .provider import missing_api_key, resolve_model
 from .service import run_review
 
 
@@ -35,7 +35,11 @@ def review(
     output_root: str = typer.Option(str(DEFAULT_OUTPUT_ROOT), "--output-root", help="Directory for review artifacts."),
 ) -> None:
     resolved_model = resolve_model(provider, model)
-    typer.echo(f"Using {resolved_model}. Set {env_hint_for_provider(provider)} before running if required.")
+    missing = missing_api_key(provider)
+    typer.echo(
+        f"Using {resolved_model}."
+        + (f" Set {missing} before running." if missing else "")
+    )
     request = ReviewRequest(
         github_url=github_url,
         pr_number=pr,

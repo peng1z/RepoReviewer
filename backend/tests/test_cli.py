@@ -96,3 +96,19 @@ def test_evaluate_and_summarize_delegate(monkeypatch, tmp_path) -> None:
     monkeypatch.setattr(cli, "summarize_annotations_file", lambda s, o: (tmp_path / "a.csv", tmp_path / "a.json"))
     res = runner.invoke(cli.app, ["summarize-annotations", "sheet.csv"])
     assert res.exit_code == 0 and "a.csv" in res.output
+
+
+def test_review_nags_about_the_key_only_when_it_is_missing(monkeypatch) -> None:
+    async def fake_run_review(request, *, progress_callback=None):
+        return _result()
+
+    monkeypatch.setattr(cli, "run_review", fake_run_review)
+
+    monkeypatch.delenv("GROQ_API_KEY", raising=False)
+    out = runner.invoke(cli.app, ["review", "https://github.com/o/demo", "--provider", "groq"]).output
+    assert "Set GROQ_API_KEY before running." in out
+
+    monkeypatch.setenv("GROQ_API_KEY", "sk-set")
+    out = runner.invoke(cli.app, ["review", "https://github.com/o/demo", "--provider", "groq"]).output
+    assert "GROQ_API_KEY" not in out
+    assert "Using groq/" in out
