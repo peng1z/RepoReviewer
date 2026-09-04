@@ -59,7 +59,7 @@ def review(
 @app.command()
 def evaluate(
     dataset: str = typer.Argument(..., help="Path to evaluation dataset JSON."),
-    output_root: str = typer.Option("../paper/experiments", "--output-root", help="Directory for experiment outputs."),
+    output_root: str = typer.Option("outputs/experiments", "--output-root", help="Directory for experiment outputs."),
 ) -> None:
     experiment_dir, rows = run_evaluation_sync(Path(dataset), Path(output_root))
     typer.echo(f"Evaluation complete: {len(rows)} runs")
@@ -69,7 +69,7 @@ def evaluate(
 @app.command()
 def summarize_annotations(
     annotation_sheet: str = typer.Argument(..., help="Path to annotation-sheet.csv."),
-    output_root: str = typer.Option("../paper/experiments/summary", "--output-root", help="Directory for aggregated annotation outputs."),
+    output_root: str = typer.Option("outputs/annotations", "--output-root", help="Directory for aggregated annotation outputs."),
 ) -> None:
     csv_path, json_path = summarize_annotations_file(Path(annotation_sheet), Path(output_root))
     typer.echo(f"Annotation summary CSV: {csv_path}")
@@ -79,7 +79,7 @@ def summarize_annotations(
 @app.command()
 def benchmark(
     dataset: str = typer.Argument(..., help="Path to mutation benchmark dataset JSON."),
-    output_root: str = typer.Option("../paper/experiments", "--output-root", help="Directory for benchmark outputs."),
+    output_root: str = typer.Option("outputs/experiments", "--output-root", help="Directory for benchmark outputs."),
     workspace_root: str = typer.Option(".cache/repo-reviewer-benchmark", "--workspace-root", help="Scratch directory for cloned and mutated copies."),
     requests_per_minute: int | None = typer.Option(None, "--rpm", help="Cap LLM calls per minute (0 disables pacing)."),
     max_retries: int | None = typer.Option(None, "--max-retries", help="Retries for rate-limit and transient errors."),
