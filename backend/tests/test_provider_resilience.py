@@ -5,6 +5,7 @@ import litellm
 import pytest
 
 from repo_reviewer import provider
+from repo_reviewer import provider as provider_module
 
 
 @pytest.fixture(autouse=True)
@@ -277,3 +278,28 @@ def test_dropped_reasons_name_the_offending_field() -> None:
 
 def test_empty_input_is_not_an_error() -> None:
     assert provider.build_comments([]) == ([], [])
+
+
+# --- API key hints --------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("provider", "expected"),
+    [("openai", "OPENAI_API_KEY"), ("anthropic", "ANTHROPIC_API_KEY"),
+     ("openrouter", "OPENROUTER_API_KEY"), ("groq", "GROQ_API_KEY"),
+     ("ollama", "API_KEY")],
+)
+def test_each_provider_maps_to_its_environment_variable(provider, expected) -> None:
+    assert provider_module.env_var_for_provider(provider) == expected
+
+
+def test_a_provider_whose_key_is_absent_is_reported(monkeypatch) -> None:
+    monkeypatch.delenv("GROQ_API_KEY", raising=False)
+    assert provider_module.missing_api_key("groq") == "GROQ_API_KEY"
+
+
+def test_a_provider_whose_key_is_present_is_not_reported(monkeypatch) -> None:
+    """The old version returned the name either way, so the CLI nagged
+    everyone regardless of whether they had already set the key."""
+    monkeypatch.setenv("GROQ_API_KEY", "sk-set")
+    assert provider_module.missing_api_key("groq") is None

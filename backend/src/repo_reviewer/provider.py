@@ -177,17 +177,28 @@ async def structured_completion(
     raise AssertionError("unreachable")  # pragma: no cover
 
 
-def env_hint_for_provider(provider: str) -> str:
-    mapping = {
-        "openai": "OPENAI_API_KEY",
-        "anthropic": "ANTHROPIC_API_KEY",
-        "openrouter": "OPENROUTER_API_KEY",
-        "groq": "GROQ_API_KEY",
-    }
-    env_name = mapping.get(provider, "API_KEY")
-    if os.getenv(env_name):
-        return env_name
-    return env_name
+PROVIDER_ENV_VARS = {
+    "openai": "OPENAI_API_KEY",
+    "anthropic": "ANTHROPIC_API_KEY",
+    "openrouter": "OPENROUTER_API_KEY",
+    "groq": "GROQ_API_KEY",
+}
+
+
+def env_var_for_provider(provider: str) -> str:
+    """The environment variable litellm reads this provider's key from."""
+    return PROVIDER_ENV_VARS.get(provider, "API_KEY")
+
+
+def missing_api_key(provider: str) -> str | None:
+    """The variable the user still needs to set, or None if it already holds one.
+
+    The previous version of this check returned the same name from both
+    branches of its `if`, so the CLI told everyone to set a key they had
+    already provided. backend/.env counts: the package loads it on import.
+    """
+    name = env_var_for_provider(provider)
+    return None if os.getenv(name) else name
 
 
 def normalize_comments(comments: list[ReviewComment]) -> list[ReviewComment]:
