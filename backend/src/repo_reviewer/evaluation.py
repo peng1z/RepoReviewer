@@ -281,6 +281,7 @@ async def _run_without_priority(request: ReviewRequest) -> ReviewResult:
         prepared=prepared,
         context=prepared.project_context,
         single_agent=False,
+        normalize=False,
     )
     summary = await _summarize(prepared, comments, prepared.project_context)
     return _save_result(
@@ -315,6 +316,7 @@ async def _review_files(
     prepared: PreparedRun,
     context: ProjectContext,
     single_agent: bool,
+    normalize: bool = True,
 ) -> list[ReviewComment]:
     if single_agent:
         return await single_agent_review(prepared, context)
@@ -330,7 +332,10 @@ async def _review_files(
         project_context=context,
     )
     state = await review_agent(state)
-    return normalize_comments(state.comments)
+    # normalize_comments is what PriorityAgent does (dedupe, rank by severity).
+    # The no_priority ablation must be able to opt out here, or it silently
+    # measures the same thing as `full`.
+    return normalize_comments(state.comments) if normalize else state.comments
 
 
 async def single_agent_review(prepared: PreparedRun, context: ProjectContext) -> list[ReviewComment]:

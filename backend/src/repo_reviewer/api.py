@@ -68,7 +68,10 @@ async def stream_review_events(job_id: str):
 
 @app.get("/reviews/{job_id}/artifacts/{artifact_name}")
 async def download_artifact(job_id: str, artifact_name: str):
-    job = job_store.get(job_id)
+    try:
+        job = job_store.get(job_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Job not found") from exc
     if not job.result:
         raise HTTPException(status_code=404, detail="Artifacts not ready")
     lookup = {
