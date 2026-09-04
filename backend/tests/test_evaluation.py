@@ -43,3 +43,38 @@ def test_export_annotation_sheet_writes_rows(tmp_path: Path) -> None:
     assert destination.exists()
     content = destination.read_text(encoding="utf-8")
     assert "a.py" in content
+
+
+# --- helpers ----------------------------------------------------------------
+
+
+def test_normalize_top_findings_flattens_dicts_and_dict_strings() -> None:
+    from repo_reviewer.evaluation import _normalize_top_findings
+
+    out = _normalize_top_findings([
+        "plain text",
+        {"severity": "high", "file": "a.py", "issue": "leak"},
+        {"issue": "no file"},
+        {"unexpected": 1},
+        "{'severity': 'low', 'file': 'b.py', 'issue': 'stringified'}",
+        "{not a dict",
+        42,
+    ])
+    assert out == [
+        "plain text",
+        "High: a.py: leak",
+        "no file",
+        '{"unexpected": 1}',
+        "Low: b.py: stringified",
+        "{not a dict",
+        "42",
+    ]
+
+
+def test_severity_counts_cover_every_level() -> None:
+    from repo_reviewer.evaluation import _severity_counts
+    from repo_reviewer.models import ReviewComment
+
+    comments = [ReviewComment(file="a", line=1, severity=s, issue="i", suggestion="s")
+                for s in ("high", "high", "low")]
+    assert _severity_counts(comments) == {"high": 2, "medium": 0, "low": 1}
