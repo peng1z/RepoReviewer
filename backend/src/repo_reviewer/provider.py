@@ -227,6 +227,36 @@ def normalize_comments(comments: list[ReviewComment]) -> list[ReviewComment]:
     return sorted(deduped, key=lambda item: (severity_rank[item.severity], item.file, item.line or 0))
 
 
+def drop_unreachable_lines(
+    comments: list[ReviewComment],
+    line_counts: dict[str, int],
+) -> list[str]:
+    """Clear line numbers that point past the end of the file they name.
+
+    Models invent positions. In a review of psf/requests, three findings on a
+    51-line file cited lines 62, 66 and 69 -- not off by a few, but outside the
+    file entirely. The observations themselves were not all worthless (one was
+    a real note about `assert` being stripped under `python -O`), so the
+    finding is kept and only the position is dropped: a citation to a line that
+    does not exist is worse than no citation, because a reader who follows it
+    finds something unrelated or nothing at all.
+
+    Returns a note per cleared finding, for the caller to surface.
+    """
+    notes: list[str] = []
+    for comment in comments:
+        limit = line_counts.get(comment.file)
+        if comment.line is None or limit is None:
+            continue
+        if comment.line < 1 or comment.line > limit:
+            notes.append(
+                f"{comment.file}:{comment.line} is outside the file ({limit} lines); "
+                "the finding is kept without a line number"
+            )
+            comment.line = None
+    return notes
+
+
 def extract_json_payload(text: str) -> str:
     stripped = text.strip()
     if not stripped:

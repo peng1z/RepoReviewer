@@ -187,6 +187,31 @@ async def test_review_accepts_findings_wrapped_in_an_object(sample_repo, fake_ll
 
 
 @pytest.mark.asyncio
+async def test_review_clears_a_line_number_past_the_end_of_the_file(sample_repo, fake_llm) -> None:
+    # A real review of psf/requests put findings on lines 62, 66 and 69 of a
+    # 51-line file. The finding is kept -- one of those three was a valid point
+    # -- but the position it cites is not.
+    line_count = len((sample_repo / "pkg" / "core.py").read_text().splitlines())
+    fake_llm.on_review([
+        {"file": "pkg/core.py", "line": line_count + 40, "severity": "low",
+         "issue": "assert can be disabled with -O", "suggestion": "raise instead"},
+        {"file": "pkg/core.py", "line": 2, "severity": "low", "issue": "in range", "suggestion": "s"},
+    ])
+
+    events: list[ProgressEvent] = []
+
+    async def progress(event: ProgressEvent) -> None:
+        events.append(event)
+
+    state = await review_agent(_prepared(sample_repo, ["pkg/core.py"]), progress)
+
+    by_issue = {comment.issue: comment for comment in state.comments}
+    assert by_issue["assert can be disabled with -O"].line is None
+    assert by_issue["in range"].line == 2
+    assert any("outside the file cleared" in event.message for event in events)
+
+
+@pytest.mark.asyncio
 async def test_review_fills_in_a_missing_file_from_the_one_being_reviewed(sample_repo, fake_llm) -> None:
     fake_llm.on_review([{"line": 3, "severity": "medium", "issue": "x", "suggestion": "y"}])
     state = await review_agent(_prepared(sample_repo, ["pkg/core.py"]))

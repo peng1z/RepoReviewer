@@ -6,7 +6,8 @@ import pytest
 
 from repo_reviewer import provider
 from repo_reviewer import provider as provider_module
-from repo_reviewer.provider import resolve_model
+from repo_reviewer.models import ReviewComment
+from repo_reviewer.provider import drop_unreachable_lines, resolve_model
 
 
 @pytest.fixture(autouse=True)
@@ -332,3 +333,53 @@ def test_resolve_model_falls_back_to_the_provider_alias() -> None:
     assert resolve_model("openrouter", None) == "openrouter/openai/gpt-4.1-mini"
     assert resolve_model("openai", None) == "openai/gpt-4.1-mini"
     assert resolve_model("unknown-provider", None) == "openai/gpt-4.1-mini"
+
+
+def _comment(file: str, line: int | None) -> ReviewComment:
+    return ReviewComment(file=file, line=line, severity="low", issue="i", suggestion="s")
+
+
+def test_drop_unreachable_lines_clears_positions_past_the_end_of_the_file() -> None:
+    # A review of psf/requests put three findings on lines 62, 66 and 69 of a
+    # 51-line file. extract_snippet returned "" for all three, which was the
+    # signal, and it was discarded.
+    comments = [_comment("a.py", 62), _comment("a.py", 20), _comment("a.py", 51)]
+
+    notes = drop_unreachable_lines(comments, {"a.py": 51})
+
+    assert [item.line for item in comments] == [None, 20, 51]
+    assert len(notes) == 1
+    assert "a.py:62 is outside the file (51 lines)" in notes[0]
+
+
+def test_drop_unreachable_lines_keeps_the_finding_itself() -> None:
+    # One of the three real cases was a valid point about `assert` being
+    # stripped under `python -O`. The observation survives; only the position
+    # it cited is dropped.
+    comment = _comment("a.py", 999)
+    comment.issue = "assert can be disabled with -O"
+
+    drop_unreachable_lines([comment], {"a.py": 10})
+
+    assert comment.issue == "assert can be disabled with -O"
+    assert comment.line is None
+
+
+def test_drop_unreachable_lines_rejects_a_line_below_one() -> None:
+    comments = [_comment("a.py", 0), _comment("a.py", -3)]
+
+    notes = drop_unreachable_lines(comments, {"a.py": 10})
+
+    assert [item.line for item in comments] == [None, None]
+    assert len(notes) == 2
+
+
+def test_drop_unreachable_lines_leaves_unknown_files_and_absent_lines_alone() -> None:
+    unknown = _comment("other.py", 4000)
+    absent = _comment("a.py", None)
+
+    notes = drop_unreachable_lines([unknown, absent], {"a.py": 10})
+
+    assert unknown.line == 4000
+    assert absent.line is None
+    assert notes == []
