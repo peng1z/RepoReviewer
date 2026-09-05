@@ -6,6 +6,7 @@ import pytest
 
 from repo_reviewer import provider
 from repo_reviewer import provider as provider_module
+from repo_reviewer.provider import resolve_model
 
 
 @pytest.fixture(autouse=True)
@@ -303,3 +304,31 @@ def test_a_provider_whose_key_is_present_is_not_reported(monkeypatch) -> None:
     everyone regardless of whether they had already set the key."""
     monkeypatch.setenv("GROQ_API_KEY", "sk-set")
     assert provider_module.missing_api_key("groq") is None
+
+
+@pytest.mark.parametrize(
+    ("provider", "model", "expected"),
+    [
+        # The case that motivated the fix: every OpenRouter model id is
+        # `vendor/model`, so the old "leave it alone if it has a slash" rule
+        # handed litellm `minimax/...`, which routes to MiniMax's own API.
+        ("openrouter", "minimax/minimax-m2.7:free", "openrouter/minimax/minimax-m2.7:free"),
+        ("openrouter", "openai/gpt-4.1-mini", "openrouter/openai/gpt-4.1-mini"),
+        # Already qualified: left alone rather than prefixed twice.
+        ("openrouter", "openrouter/minimax/minimax-m2.7:free", "openrouter/minimax/minimax-m2.7:free"),
+        ("openai", "openai/gpt-4.1-mini", "openai/gpt-4.1-mini"),
+        # Bare names still pick up their provider.
+        ("openai", "gpt-4.1-mini", "openai/gpt-4.1-mini"),
+        ("anthropic", "claude-3-5-haiku-latest", "anthropic/claude-3-5-haiku-latest"),
+        ("groq", "llama-3.3-70b-versatile", "groq/llama-3.3-70b-versatile"),
+        ("ollama", "llama3", "ollama/llama3"),
+    ],
+)
+def test_resolve_model_qualifies_with_the_requested_provider(provider, model, expected) -> None:
+    assert resolve_model(provider, model) == expected
+
+
+def test_resolve_model_falls_back_to_the_provider_alias() -> None:
+    assert resolve_model("openrouter", None) == "openrouter/openai/gpt-4.1-mini"
+    assert resolve_model("openai", None) == "openai/gpt-4.1-mini"
+    assert resolve_model("unknown-provider", None) == "openai/gpt-4.1-mini"

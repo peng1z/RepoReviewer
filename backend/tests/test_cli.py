@@ -44,10 +44,12 @@ def test_review_passes_flags_through_and_prints_artifacts(monkeypatch) -> None:
     assert res.exit_code == 0, res.output
     req = seen["request"]
     assert req.pr_number == 5 and req.max_files == 3 and req.include_tests is False
-    # A model that already contains "/" is taken as fully qualified and is NOT
-    # prefixed with the provider -- so for OpenRouter the caller must write
-    # "openrouter/minimax/..." explicitly. This test pins that contract.
-    assert req.model == "minimax/minimax-m2.7:free"
+    # An OpenRouter model id is always `vendor/model`, and the provider prefix
+    # is added on top of it. This assertion previously pinned the opposite --
+    # that a model containing "/" is left alone -- which documented the bug
+    # rather than the intent: litellm read "minimax/..." as MiniMax's own API
+    # and answered 401 against an OpenRouter key.
+    assert req.model == "openrouter/minimax/minimax-m2.7:free"
     assert "1 findings" in res.output
     assert "/tmp/review.md" in res.output
 

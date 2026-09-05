@@ -129,11 +129,24 @@ MODEL_ALIASES = {
 
 
 def resolve_model(provider: str, model: str | None) -> str:
-    if model:
-        if "/" in model:
-            return model
-        return f"{provider}/{model}"
-    return MODEL_ALIASES.get(provider, "openai/gpt-4.1-mini")
+    """Qualify a model name with the provider litellm should route it through.
+
+    The previous rule was "leave it alone if it contains a slash", which is
+    exactly backwards for OpenRouter: every OpenRouter model id is
+    `vendor/model`, so the branch that adds the prefix could never fire for
+    the provider that needs it most. `--provider openrouter --model
+    minimax/minimax-m2.7:free` -- the natural invocation, and the shape
+    OpenRouter itself publishes -- was handed to litellm as `minimax/...`,
+    which routes to MiniMax's own API and fails with 401 against an
+    OpenRouter key. Note that MODEL_ALIASES already spells the default as
+    `openrouter/openai/gpt-4.1-mini`, so the three-segment form was always
+    the intended one.
+    """
+    if not model:
+        return MODEL_ALIASES.get(provider, "openai/gpt-4.1-mini")
+    if model.startswith(f"{provider}/"):
+        return model
+    return f"{provider}/{model}"
 
 
 async def structured_completion(
