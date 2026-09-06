@@ -31,6 +31,9 @@ venv/
 # --- Node / frontend ---------------------------------------------------
 node_modules/
 .next/
+# Static export output, built by `npm run build:static` and uploaded by
+# wrangler. It was committed by accident in #15/#16.
+frontend/out/
 .turbo/
 coverage/
 *.tsbuildinfo

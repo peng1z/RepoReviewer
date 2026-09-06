@@ -4,6 +4,27 @@
 
 RepoReviewer is a local-first Python CLI plus web UI that runs a multi-agent code review workflow on public GitHub repositories. It uses FastAPI for the backend API, LangGraph for agent orchestration, LiteLLM for provider abstraction, PyGithub for PR metadata, and Next.js for the frontend.
 
+**[Try it live](https://reporeviewer.peng1z.workers.dev/)** — no signup, no API key,
+nothing to install.
+
+The hosted demo ships a real review of [psf/requests](https://github.com/psf/requests),
+captured end to end, so it opens on a finished report instead of an empty form.
+Nothing in the output was edited.
+
+Every finding in it carries what was checked about it. The positional check --
+does the cited line exist, and can it hold what the finding describes -- is
+mechanical and covers all 65. The substantive check -- is the problem really
+there -- needs judgement, so it was done by hand for the 8 high-severity
+findings: 1 accurate, 3 describing something real at the wrong line, 4 false
+positives. The other 57 carry the positional check alone and say so.
+
+Publishing a model's claims about someone else's project without checking them
+would mean asserting defects that may not exist.
+
+There is no hosted backend, on purpose: reviewing a repository means cloning
+whatever URL a visitor types and running a model over it. To run a review, point
+**Backend URL** at a RepoReviewer backend you run yourself.
+
 Paper: [RepoReviewer on arXiv](https://arxiv.org/abs/2603.16107)
 
 ![RepoReviewer Final Report](./docs/report.png)
@@ -22,15 +43,24 @@ Paper: [RepoReviewer on arXiv](https://arxiv.org/abs/2603.16107)
 
 ### Home
 
+The recorded review is already rendered below the form; **Backend URL** is empty
+until you point it at a backend you run.
+
 ![RepoReviewer Home](./docs/home.png)
+
+### How the findings were checked
+
+![RepoReviewer verification panel](./docs/verification.png)
+
+### Final Report
+
+Each finding carries its check inline.
+
+![RepoReviewer Final Report](./docs/report.png)
 
 ### Running Review
 
 ![RepoReviewer Running Review](./docs/running.png)
-
-### Final Report
-
-![RepoReviewer Final Report](./docs/report.png)
 
 ## Architecture
 
@@ -182,6 +212,23 @@ You can add a `.repo-reviewer.toml` file to a reviewed repository to define:
 ## License
 
 MIT. See [LICENSE](./LICENSE).
+
+## The Hosted Demo
+
+https://reporeviewer.peng1z.workers.dev/ is the frontend alone, deployed to
+Cloudflare Workers as static assets. There is no Worker code in the request
+path: `npm run build:static` emits plain files and Cloudflare serves them.
+
+That is deliberate rather than a limitation. A public backend would clone any
+repository a visitor names and spend an API key someone else pays for. Shipping
+a recorded review instead costs nothing, has nothing to abuse, and still shows
+real output. Live reviews are available to anyone who points **Backend URL** at
+a backend they run.
+
+`frontend/wrangler.jsonc` holds the deployment config, and
+[docs/demo-recording.md](./docs/demo-recording.md) explains how the recording is
+captured, how its checks are produced, and what the recording does *not*
+establish.
 
 ## Security Notes
 
