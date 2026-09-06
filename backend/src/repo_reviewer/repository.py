@@ -60,7 +60,16 @@ def collect_repo_files(
     return accepted, skipped
 
 
-def prioritize_files(files: list[Path], max_files: int) -> list[Path]:
+def prioritize_files(files: list[Path], max_files: int) -> tuple[list[Path], list[Path]]:
+    """Rank reviewable files and split them at the cap.
+
+    Returns (selected, dropped). The second half exists because it used to be
+    thrown away: the function ended in `sorted(...)[:max_files]` and the files
+    past the cut vanished without a record, while files the collector rejected
+    each carried a reason. A review of psf/requests reported 109 skipped files
+    with reasons and said nothing about the 40 eligible ones it never opened --
+    so the report read as complete coverage of 17%.
+    """
     def score(path: Path) -> tuple[int, int, str]:
         name = path.name
         suffix = path.suffix.lower()
@@ -77,7 +86,8 @@ def prioritize_files(files: list[Path], max_files: int) -> list[Path]:
         depth = len(path.parts)
         return (primary, depth, path_str)
 
-    return sorted(files, key=score)[:max_files]
+    ranked = sorted(files, key=score)
+    return ranked[:max_files], ranked[max_files:]
 
 
 def extract_snippet(path: Path, line: int | None, radius: int) -> str:

@@ -346,3 +346,58 @@ async def test_cloner_checks_out_the_pr_head_in_pr_mode(monkeypatch, tmp_path) -
     monkeypatch.chdir(tmp_path)
     await cloner_agent(ReviewState(request=_request(pr_number=42)))
     assert seen["pr"] == 42
+
+
+@pytest.mark.asyncio
+async def test_context_records_files_dropped_by_the_max_files_cap(local_clone, fake_llm) -> None:
+    # A review of psf/requests reported 109 skipped files with reasons and said
+    # nothing about the 40 eligible files it never opened, so the report read as
+    # complete coverage of 17% of the repository.
+    fake_llm.on_context(CONTEXT_JSON)
+    state = _state(local_clone, max_files=1)
+    state.workspace_dir = None
+
+    state = await cloner_agent(state)
+    state = await context_agent(state)
+
+    assert len(state.files_to_review) == 1
+    over_cap = [item for item in state.skipped_files if item.reason.startswith("not reviewed: max_files")]
+    assert over_cap, "files cut by the cap must be reported, not silently dropped"
+    assert "max_files limit of 1" in over_cap[0].reason
+    # Every eligible file is accounted for: reviewed, or explained.
+    assert set(state.files_to_review).isdisjoint(item.path for item in over_cap)
+
+
+@pytest.mark.asyncio
+async def test_summary_states_coverage_when_files_were_cut(local_clone, fake_llm) -> None:
+    fake_llm.on_context(CONTEXT_JSON)
+    fake_llm.on_review([])
+    fake_llm.on_summary({"headline": "ok", "top_findings": ["f"]})
+    state = _state(local_clone, max_files=1)
+    state.workspace_dir = None
+
+    state = await cloner_agent(state)
+    state = await context_agent(state)
+    state = await review_agent(state)
+    state = await summary_agent(state)
+
+    coverage = [note for note in state.summary.skipped_notes if note.startswith("Coverage:")]
+    assert len(coverage) == 1
+    assert "1 of" in coverage[0]
+    assert "never opened" in coverage[0]
+
+
+@pytest.mark.asyncio
+async def test_summary_omits_the_coverage_note_when_nothing_was_cut(local_clone, fake_llm) -> None:
+    fake_llm.on_context(CONTEXT_JSON)
+    fake_llm.on_review([])
+    fake_llm.on_summary({"headline": "ok", "top_findings": ["f"]})
+    state = _state(local_clone, max_files=500)
+    state.workspace_dir = None
+
+    state = await cloner_agent(state)
+    state = await context_agent(state)
+    state = await review_agent(state)
+    state = await summary_agent(state)
+
+    assert not any(note.startswith("Coverage:") for note in state.summary.skipped_notes)

@@ -21,6 +21,11 @@ from .provider import (
 from .repository import collect_repo_files, detect_key_files, extract_snippet, prioritize_files
 
 
+OVER_CAP_REASON = (
+    "not reviewed: max_files limit of {limit} reached "
+    "({eligible} files were eligible)"
+)
+
 ProgressCallback = Callable[[ProgressEvent], Awaitable[None]]
 
 
@@ -80,8 +85,13 @@ async def context_agent(state: ReviewState, progress: ProgressCallback | None = 
             )
         )
         selected = [path for path in accepted_files if path.as_posix() in pr_files]
+        over_cap = []
     else:
-        selected = prioritize_files(accepted_files, state.request.max_files)
+        selected, over_cap = prioritize_files(accepted_files, state.request.max_files)
+        skipped.extend(
+            (path, OVER_CAP_REASON.format(limit=state.request.max_files, eligible=len(accepted_files)))
+            for path in over_cap
+        )
 
     state.files_to_review = [path.as_posix() for path in selected]
     state.skipped_files = [SkippedFile(path=path.as_posix(), reason=reason) for path, reason in skipped]
@@ -220,13 +230,28 @@ async def summary_agent(state: ReviewState, progress: ProgressCallback | None = 
     state.summary = ReviewSummary(
         headline=parsed.get("headline", "Review complete."),
         top_findings=_coerce_string_list(parsed.get("top_findings"), fallback=["No actionable findings were returned."])[:5],
-        skipped_notes=[
-            "Generated, binary, oversized, and ignored files were excluded from review.",
-            "PR reviews focus comments on changed files while using broader repo context.",
-        ],
+        skipped_notes=_skipped_notes(state),
     )
     await emit(progress, ProgressEvent(stage="summary", message="Prepared final summary", percent=95))
     return state
+
+
+def _skipped_notes(state: ReviewState) -> list[str]:
+    notes = [
+        "Generated, binary, oversized, and ignored files were excluded from review.",
+        "PR reviews focus comments on changed files while using broader repo context.",
+    ]
+    over_cap = sum(
+        1 for item in state.skipped_files if item.reason.startswith("not reviewed: max_files")
+    )
+    if over_cap:
+        reviewed = len(state.files_to_review)
+        notes.insert(
+            0,
+            f"Coverage: {reviewed} of {reviewed + over_cap} eligible files were reviewed. "
+            f"The other {over_cap} were ranked below the max_files cut and never opened.",
+        )
+    return notes
 
 
 def build_graph(progress: ProgressCallback | None = None):
