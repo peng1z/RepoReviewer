@@ -65,5 +65,14 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
+      - name: Test
+        run: npm test
+
       - name: Build
         run: npm run build
+
+      # What Cloudflare Workers runs. The two outputs are mutually
+      # exclusive, so a break in the static path would otherwise go
+      # unnoticed until a deploy.
+      - name: Build (static export)
+        run: npm run build:static

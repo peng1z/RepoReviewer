@@ -8,9 +8,11 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "build:static": "NEXT_OUTPUT=export next build",
     "typecheck": "tsc --noEmit",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test": "vitest run"
   },
   "dependencies": {
     "next": "^15.5.12",
@@ -18,9 +20,15 @@
     "react-dom": "19.0.0"
   },
   "devDependencies": {
+    "@testing-library/dom": "^10.4.1",
+    "@testing-library/jest-dom": "^7.0.1",
+    "@testing-library/react": "^16.3.3",
     "@types/node": "22.15.17",
     "@types/react": "19.0.12",
     "@types/react-dom": "19.0.5",
-    "typescript": "5.8.3"
+    "jsdom": "^29.1.1",
+    "typescript": "5.8.3",
+    "vitest": "^3.2.7",
+    "wrangler": "^4.129.0"
   }
 }
