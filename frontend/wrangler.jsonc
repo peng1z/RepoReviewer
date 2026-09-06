@@ -1,0 +1,16 @@
+{
+  // Deployment config for the hosted demo, kept in the repo so the build that
+  // ships is described by the commit that ships it.
+  //
+  // Assets-only: no `main`, because `npm run build:static` emits plain files
+  // and no Worker code sits in the request path.
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "reporeviewer",
+  "compatibility_date": "2026-09-05",
+  "assets": {
+    "directory": "./out",
+    // The static export emits a real 404.html; serve it rather than rewriting
+    // unknown paths to index.html, which would mask broken links.
+    "not_found_handling": "404-page"
+  }
+}

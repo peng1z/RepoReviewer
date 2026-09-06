@@ -1,0 +1,1527 @@
+{
+  "slug": "requests",
+  "label": "psf/requests",
+  "elapsedSeconds": 317.2,
+  "commit": "dae7ef63b4df6eded86637f251fc4e3a06c3b479",
+  "events": [
+    {
+      "stage": "cloner",
+      "message": "Cloned requests",
+      "percent": 15,
+      "payload": null
+    },
+    {
+      "stage": "context",
+      "message": "Prepared context for 20 files",
+      "percent": 35,
+      "payload": null
+    },
+    {
+      "stage": "review",
+      "message": "Reviewed README.md",
+      "percent": 37,
+      "payload": null
+    },
+    {
+      "stage": "review",
+      "message": "Reviewed setup.py",
+      "percent": 39,
+      "payload": null
+    },
+    {
+      "stage": "review",
+      "message": "Reviewed docs/conf.py (2 unusable line number(s) cleared)",
+      "percent": 41,
+      "payload": null
+    },
+    {
+      "stage": "review",
+      "message": "Reviewed docs/_themes/flask_theme_support.py",
+      "percent": 43,
+      "payload": null
+    },
+    {
+      "stage": "review",
+      "message": "Reviewed src/requests/__init__.py",
+      "percent": 45,
+      "payload": null
+    },
+    {
+      "stage": "review",
+      "message": "Reviewed src/requests/__version__.py",
+      "percent": 47,
+      "payload": null
+    },
+    {
+      "stage": "review",
+      "message": "Reviewed src/requests/_internal_utils.py (1 unusable line number(s) cleared)",
+      "percent": 49,
+      "payload": null
+    },
+    {
+      "stage": "review",
+      "message": "Reviewed src/requests/_types.py (2 unusable line number(s) cleared)",
+      "percent": 51,
+      "payload": null
+    },
+    {
+      "stage": "review",
+      "message": "Reviewed src/requests/adapters.py (1 unusable line number(s) cleared)",
+      "percent": 53,
+      "payload": null
+    },
+    {
+      "stage": "review",
+      "message": "Reviewed src/requests/api.py",
+      "percent": 55,
+      "payload": null
+    },
+    {
+      "stage": "review",
+      "message": "Reviewed src/requests/auth.py",
+      "percent": 57,
+      "payload": null
+    },
+    {
+      "stage": "review",
+      "message": "Reviewed src/requests/certs.py (1 unusable line number(s) cleared)",
+      "percent": 59,
+      "payload": null
+    },
+    {
+      "stage": "review",
+      "message": "Reviewed src/requests/compat.py",
+      "percent": 61,
+      "payload": null
+    },
+    {
+      "stage": "review",
+      "message": "Reviewed src/requests/cookies.py (1 unusable line number(s) cleared)",
+      "percent": 63,
+      "payload": null
+    },
+    {
+      "stage": "review",
+      "message": "Reviewed src/requests/exceptions.py (1 unusable line number(s) cleared)",
+      "percent": 65,
+      "payload": null
+    },
+    {
+      "stage": "review",
+      "message": "Reviewed src/requests/help.py",
+      "percent": 67,
+      "payload": null
+    },
+    {
+      "stage": "review",
+      "message": "Reviewed src/requests/hooks.py (1 unusable line number(s) cleared)",
+      "percent": 69,
+      "payload": null
+    },
+    {
+      "stage": "review",
+      "message": "Reviewed src/requests/packages.py (1 unusable line number(s) cleared)",
+      "percent": 71,
+      "payload": null
+    },
+    {
+      "stage": "review",
+      "message": "Reviewed src/requests/sessions.py (1 unusable line number(s) cleared)",
+      "percent": 73,
+      "payload": null
+    },
+    {
+      "stage": "review",
+      "message": "Reviewed src/requests/status_codes.py",
+      "percent": 75,
+      "payload": null
+    },
+    {
+      "stage": "priority",
+      "message": "Ranked 70 findings",
+      "percent": 85,
+      "payload": null
+    },
+    {
+      "stage": "summary",
+      "message": "Prepared final summary",
+      "percent": 95,
+      "payload": null
+    },
+    {
+      "stage": "done",
+      "message": "Artifacts saved",
+      "percent": 100,
+      "payload": null
+    }
+  ],
+  "result": {
+    "repo_url": "https://github.com/psf/requests",
+    "repo_name": "requests",
+    "mode": "repo",
+    "provider": "openrouter",
+    "model": "openrouter/minimax/minimax-m2.7:free",
+    "generated_at": "2026-09-06T07:16:22.706231Z",
+    "context": {
+      "readme_summary": "Requests is a popular Python HTTP library for sending HTTP/1.1 requests. It provides an elegant, simple API for making HTTP requests with features like connection pooling, cookie persistence, TLS/SSL verification, authentication, automatic content decoding, and streaming. It supports Python 3.10+ and is one of the most downloaded Python packages with ~300M weekly downloads, depended upon by 4M+ repositories on GitHub.",
+      "folder_summary": "Repository structure includes: .github (GitHub workflows), docs (documentation), src (source code), plus standard Python project files (pyproject.toml, setup.py, tox.ini). Development dependencies managed via requirements-dev.txt. Pre-commit hooks configured for code quality. Documentation hosted on ReadTheDocs.",
+      "key_files": [
+        "README.md"
+      ],
+      "architecture_notes": [
+        "Standard Python package layout with source code in src/ directory. Uses pyproject.toml for modern build configuration. tox.ini indicates support for testing across multiple Python environments. Pre-commit hooks enforce code quality standards. The library is PSF maintained and follows established Python packaging conventions."
+      ]
+    },
+    "comments": [
+      {
+        "file": "src/requests/_types.py",
+        "line": null,
+        "severity": "high",
+        "issue": "The `is_prepared` function has misleading behavior: the docstring claims it 'Verify a PreparedRequest has been fully prepared' but at runtime it unconditionally returns `True`, performing no actual verification. This could lead to bugs where callers assume the function validates state.",
+        "suggestion": "Either: (1) Remove the function entirely if not needed at runtime, (2) Implement actual validation logic that checks `url` and `method` are not None, or (3) Rename to `is_prepared_hint` to indicate it's only for type narrowing and not runtime validation.",
+        "snippet": "1: \"\"\"\n2: requests._types\n3: ~~~~~~~~~~~~~~~\n4: \n5: This module contains type aliases used internally by the Requests library.\n6: These types are not part of the public API and must not be relied upon\n7: by external code.\n8: \"\"\"\n9: \n10: from __future__ import annotations\n11: \n12: from collections.abc import Callable, Iterable, Mapping, MutableMapping, Sequence"
+      },
+      {
+        "file": "src/requests/auth.py",
+        "line": 195,
+        "severity": "high",
+        "issue": "Potential KeyError when 'realm' or 'nonce' keys are missing from chal dict",
+        "suggestion": "Add validation to check if 'realm' and 'nonce' exist in self._thread_local.chal before accessing them, or handle KeyError with an appropriate error message.",
+        "snippet": "189:             hash_utf8 = sha_utf8\n190:         elif _algorithm == \"SHA-256\":\n191: \n192:             def sha256_utf8(x: str | bytes) -> str:\n193:                 if isinstance(x, str):\n194:                     x = x.encode(\"utf-8\")\n195:                 return hashlib.sha256(x, usedforsecurity=False).hexdigest()\n196: \n197:             hash_utf8 = sha256_utf8\n198:         elif _algorithm == \"SHA-512\":\n199: \n200:             def sha512_utf8(x: str | bytes) -> str:\n201:                 if isinstance(x, str):"
+      },
+      {
+        "file": "src/requests/auth.py",
+        "line": 195,
+        "severity": "high",
+        "issue": "Type mismatch in A1 hash construction: password may be bytes but is concatenated with str",
+        "suggestion": "Convert password to string or encode it properly before constructing A1. The line 'A1 = f\"{self.username}:{realm}:{self.password}\"' will fail if password is bytes.",
+        "snippet": "189:             hash_utf8 = sha_utf8\n190:         elif _algorithm == \"SHA-256\":\n191: \n192:             def sha256_utf8(x: str | bytes) -> str:\n193:                 if isinstance(x, str):\n194:                     x = x.encode(\"utf-8\")\n195:                 return hashlib.sha256(x, usedforsecurity=False).hexdigest()\n196: \n197:             hash_utf8 = sha256_utf8\n198:         elif _algorithm == \"SHA-512\":\n199: \n200:             def sha512_utf8(x: str | bytes) -> str:\n201:                 if isinstance(x, str):"
+      },
+      {
+        "file": "src/requests/cookies.py",
+        "line": 124,
+        "severity": "high",
+        "issue": "MockResponse.getheaders() method does not return a value. It calls self._headers.getheaders(name) but the result is discarded, causing the method to implicitly return None.",
+        "suggestion": "Add return statement: return self._headers.getheaders(name)",
+        "snippet": "118:     the way `http.cookiejar` expects to see them.\n119:     \"\"\"\n120: \n121:     def __init__(self, headers: Any) -> None:\n122:         \"\"\"Make a MockResponse for `cookiejar` to read.\n123: \n124:         :param headers: a httplib.HTTPMessage or analogous carrying the headers\n125:         \"\"\"\n126:         self._headers = headers\n127: \n128:     def info(self) -> Any:\n129:         return self._headers\n130: "
+      },
+      {
+        "file": "README.md",
+        "line": null,
+        "severity": "medium",
+        "issue": "The git clone workaround for `fetch.fsck.badTimezone=ignore` is outdated. Git fixed this timezone-related fsck issue in version 2.38+ (October 2022). Most users will not encounter this error with modern Git versions.",
+        "suggestion": "Consider removing the fetch.fsck.badTimezone workaround section, or add a note that this is only needed for Git versions prior to 2.38. Alternatively, keep a brief mention in a troubleshooting section rather than in main cloning instructions.",
+        "snippet": "1: # Requests\n2: \n3: [![Version](https://img.shields.io/pypi/v/requests.svg?maxAge=86400)](https://pypi.org/project/requests/)\n4: [![Supported Versions](https://img.shields.io/pypi/pyversions/requests.svg)](https://pypi.org/project/requests)\n5: [![Downloads](https://static.pepy.tech/badge/requests/month)](https://pepy.tech/project/requests)\n6: [![Contributors](https://img.shields.io/github/contributors/psf/requests.svg)](https://github.com/psf/requests/graphs/contributors)\n7: [![Documentation](https://readthedocs.org/projects/requests/badge/?version=latest)](https://requests.readthedocs.io)\n8: \n9: **Requests** is a simple, yet elegant, HTTP library.\n10: \n11: ```python\n12: >>> import requests"
+      },
+      {
+        "file": "docs/conf.py",
+        "line": 56,
+        "severity": "medium",
+        "issue": "Pygments style 'flask_theme_support.FlaskyStyle' may not be available",
+        "suggestion": "The 'flask_theme_support.FlaskyStyle' is specific to Flask's documentation theme and may not be installed. Use a standard Pygments style like 'sphinx', 'default', or 'monokai' instead, or ensure the Flasky package is listed as a documentation dependency.",
+        "snippet": "50: # source_suffix = ['.rst', '.md']\n51: source_suffix = \".rst\"\n52: \n53: # The encoding of source files.\n54: # source_encoding = 'utf-8-sig'\n55: \n56: # The master toctree document.\n57: root_doc = \"index\"\n58: \n59: # General information about the project.\n60: project = u\"Requests\"\n61: copyright = u\"Kenneth Reitz and contributors\"\n62: author = u\"Kenneth Reitz\""
+      },
+      {
+        "file": "docs/conf.py",
+        "line": 70,
+        "severity": "medium",
+        "issue": "language = None may cause issues with some Sphinx features",
+        "suggestion": "Explicitly set `language = 'en'` instead of None to ensure consistent behavior and avoid potential issues with language-specific features like gettext translation or search indexing.",
+        "snippet": "64: # The version info for the project you're documenting, acts as replacement for\n65: # |version| and |release|, also used in various other places throughout the\n66: # built documents.\n67: #\n68: # The short X.Y version.\n69: version = requests.__version__\n70: # The full version, including alpha/beta/rc tags.\n71: release = requests.__version__\n72: \n73: # The language for content autogenerated by Sphinx. Refer to documentation\n74: # for a list of supported languages.\n75: #\n76: # This is also used if you do content translation via gettext catalogs."
+      },
+      {
+        "file": "setup.py",
+        "line": 4,
+        "severity": "medium",
+        "issue": "The `# noqa: UP036` comment suppresses a valid pyupgrade linting rule about outdated version blocks. While this check is currently valid (Python 3.10+), this pattern may become problematic if Python 3.10 reaches end-of-life and the version check is no longer needed.",
+        "suggestion": "Consider either removing the version check entirely (relying on pyproject.toml's `requires-python` field), or documenting why the noqa is necessary. Alternatively, use a comment like `# Deliberately keeping version check for clear error messages` instead of noqa.",
+        "snippet": "1: import sys\n2: \n3: if sys.version_info < (3, 10):  # noqa: UP036\n4:     sys.stderr.write(\"Requests requires Python 3.10 or later.\\n\")\n5:     sys.exit(1)\n6: \n7: from setuptools import setup\n8: \n9: setup()"
+      },
+      {
+        "file": "src/requests/__init__.py",
+        "line": 62,
+        "severity": "medium",
+        "issue": "urllib3_version_list is a slice of a split result; the append() mutates this shared reference.",
+        "suggestion": "Use a copy before appending: urllib3_version_list = urllib3_version.split('.')[:3] + (['0'] if len(urllib3_version_list) == 2 else [])",
+        "snippet": "56: except ImportError:\n57:     chardet_version = None\n58: \n59: \n60: def check_compatibility(\n61:     urllib3_version: str,\n62:     chardet_version: str | None,\n63:     charset_normalizer_version: str | None,\n64: ) -> None:\n65:     urllib3_version_list = urllib3_version.split(\".\")[:3]\n66:     assert urllib3_version_list != [\"dev\"]  # Verify urllib3 isn't installed from git.\n67: \n68:     # Sometimes, urllib3 only reports its version as 16.1."
+      },
+      {
+        "file": "src/requests/__version__.py",
+        "line": null,
+        "severity": "medium",
+        "issue": "Copyright notice and author information are outdated. The file attributes the project to Kenneth Reitz, but Requests is now PSF (Python Software Foundation) maintained.",
+        "suggestion": "Update __copyright__ to 'Copyright Python Software Foundation' or similar, and update __author__ and __author_email__ to reflect current maintainers (e.g., 'Kenneth Reitz, PSF' with a PSF contact email).",
+        "snippet": "1: # .-. .-. .-. . . .-. .-. .-. .-.\n2: # |(  |-  |.| | | |-  `-.  |  `-.\n3: # ' ' `-' `-`.`-' `-' `-'  '  `-'\n4: \n5: __title__ = \"requests\"\n6: __description__ = \"Python HTTP for Humans.\"\n7: __url__ = \"https://requests.readthedocs.io\"\n8: __version__ = \"2.34.2\"\n9: __build__ = 0x023402\n10: __author__ = \"Kenneth Reitz\"\n11: __author_email__ = \"me@kennethreitz.org\"\n12: __license__ = \"Apache-2.0\""
+      },
+      {
+        "file": "src/requests/_internal_utils.py",
+        "line": 43,
+        "severity": "medium",
+        "issue": "The `unicode_is_ascii` function uses `assert` for input validation, which is problematic because assertions can be disabled with the `-O` flag, bypassing the check entirely in production environments.",
+        "suggestion": "Replace the assertion with a proper type check that raises a TypeError: `if not isinstance(u_string, str): raise TypeError('u_string must be a str')`",
+        "snippet": "37: \n38: \n39: def unicode_is_ascii(u_string: str) -> bool:\n40:     \"\"\"Determine if unicode string only contains ASCII characters.\n41: \n42:     :param str u_string: unicode string to check. Must be unicode\n43:         and not Python 2 `str`.\n44:     :rtype: bool\n45:     \"\"\"\n46:     assert isinstance(u_string, str)\n47:     try:\n48:         u_string.encode(\"ascii\")\n49:         return True"
+      },
+      {
+        "file": "src/requests/_types.py",
+        "line": 37,
+        "severity": "medium",
+        "issue": "The `has_read` function returns `TypeIs[SupportsRead[str | bytes]]` but its implementation also returns `True` for objects that merely have a `read` attribute via `hasattr()`, which may not conform to `SupportsRead[str | bytes]`. This provides weaker type safety than the return type suggests.",
+        "suggestion": "Consider returning `TypeIs[object]` or add a runtime type check for objects with `hasattr(obj, 'read')` to ensure they have a compatible signature.",
+        "snippet": "31: \n32: def has_read(obj: Any) -> TypeIs[SupportsRead[str | bytes]]:\n33:     \"\"\"Check if obj supports read, including __getattr__ based proxies.\"\"\"\n34:     return isinstance(obj, SupportsRead) or hasattr(obj, \"read\")\n35: \n36: \n37: @runtime_checkable\n38: class SupportsItems(Protocol[_KT_co, _VT_co]):\n39:     def items(self) -> Iterable[tuple[_KT_co, _VT_co]]: ...\n40: \n41: \n42: # These are needed at runtime for default_hooks() return type\n43: HookType: TypeAlias = Callable[[\"Response\"], Any]"
+      },
+      {
+        "file": "src/requests/adapters.py",
+        "line": 305,
+        "severity": "medium",
+        "issue": "Bare `raise` statement without exception context. If an unexpected `_HTTPError` subclass reaches this point, it will raise without traceback context, making debugging difficult.",
+        "suggestion": "Consider adding `raise ConnectionError(e, request=request)` as a fallback case, or log the unexpected exception type before re-raising.",
+        "snippet": "299:                 num_pools=self._pool_connections,\n300:                 maxsize=self._pool_maxsize,\n301:                 block=self._pool_block,\n302:                 **proxy_kwargs,\n303:             )\n304: \n305:         return manager\n306: \n307:     def cert_verify(\n308:         self, conn: Any, url: str, verify: _t.VerifyType, cert: _t.CertType\n309:     ) -> None:\n310:         \"\"\"Verify a SSL certificate. This method should not be called from user\n311:         code, and is only exposed for use when subclassing the"
+      },
+      {
+        "file": "src/requests/api.py",
+        "line": 144,
+        "severity": "medium",
+        "issue": "The `put()` function docstring mentions a `json` parameter, but the function signature does not include it explicitly.",
+        "suggestion": "Either add `json: _t.JsonType = None` parameter to the `put()` function signature to match the docstring, or remove the `:param json:` line from the docstring. The current discrepancy may confuse users who rely on the documentation.",
+        "snippet": "138:     url: _t.UriType, data: _t.DataType = None, **kwargs: Unpack[_t.DataKwargs]\n139: ) -> Response:\n140:     r\"\"\"Sends a PUT request.\n141: \n142:     :param url: URL for the new :class:`Request` object.\n143:     :param data: (optional) Dictionary, list of tuples, bytes, or file-like\n144:         object to send in the body of the :class:`Request`.\n145:     :param json: (optional) A JSON serializable Python object to send in the body of the :class:`Request`.\n146:     :param \\*\\*kwargs: Optional arguments that ``request`` takes.\n147:     :return: :class:`Response <Response>` object\n148:     :rtype: requests.Response\n149:     \"\"\"\n150: "
+      },
+      {
+        "file": "src/requests/api.py",
+        "line": 160,
+        "severity": "medium",
+        "issue": "The `patch()` function docstring mentions a `json` parameter, but the function signature does not include it explicitly.",
+        "suggestion": "Either add `json: _t.JsonType = None` parameter to the `patch()` function signature to match the docstring, or remove the `:param json:` line from the docstring. The current discrepancy may confuse users who rely on the documentation.",
+        "snippet": "154: def patch(\n155:     url: _t.UriType, data: _t.DataType = None, **kwargs: Unpack[_t.DataKwargs]\n156: ) -> Response:\n157:     r\"\"\"Sends a PATCH request.\n158: \n159:     :param url: URL for the new :class:`Request` object.\n160:     :param data: (optional) Dictionary, list of tuples, bytes, or file-like\n161:         object to send in the body of the :class:`Request`.\n162:     :param json: (optional) A JSON serializable Python object to send in the body of the :class:`Request`.\n163:     :param \\*\\*kwargs: Optional arguments that ``request`` takes.\n164:     :return: :class:`Response <Response>` object\n165:     :rtype: requests.Response\n166:     \"\"\""
+      },
+      {
+        "file": "src/requests/auth.py",
+        "line": 214,
+        "severity": "medium",
+        "issue": "SHA-1 is used for cnonce generation but is considered cryptographically weak",
+        "suggestion": "Consider using hashlib.sha256 or hashlib.sha512 for cnonce generation to align with modern security standards.",
+        "snippet": "208:             return None\n209: \n210:         def KD(s: str, d: str) -> str:\n211:             return hash_utf8(f\"{s}:{d}\")\n212: \n213:         # XXX not implemented yet\n214:         entdig = None\n215:         p_parsed = urlparse(url)\n216:         #: path is request-uri defined in RFC 2616 which should not be empty\n217:         path = p_parsed.path or \"/\"\n218:         if p_parsed.query:\n219:             path += f\"?{p_parsed.query}\"\n220: "
+      },
+      {
+        "file": "src/requests/certs.py",
+        "line": null,
+        "severity": "medium",
+        "issue": "The `where` function is imported but not exposed as a public API at module level. Users expecting `requests.certs.where()` will get an AttributeError.",
+        "suggestion": "Add `where = where` after the import statement to explicitly expose the function as a module-level attribute, making it callable via `requests.certs.where()`.",
+        "snippet": "1: #!/usr/bin/env python\n2: \n3: \"\"\"\n4: requests.certs\n5: ~~~~~~~~~~~~~~\n6: \n7: This module returns the preferred default CA certificate bundle. There is\n8: only one — the one from the certifi package.\n9: \n10: If you are packaging Requests, e.g., for a Linux distribution or a managed\n11: environment, you can change the definition of where() to return a separately\n12: packaged CA bundle."
+      },
+      {
+        "file": "src/requests/compat.py",
+        "line": 84,
+        "severity": "medium",
+        "issue": "The variable `is_urllib3_1` is defined but never used in the file or exported.",
+        "suggestion": "Either remove this unused variable or add an `__all__` export if it's intended for external use.",
+        "snippet": "78:     from json import JSONDecodeError\n79: \n80: # Keep OrderedDict for backwards compatibility.\n81: from collections import OrderedDict\n82: from collections.abc import Callable, Mapping, MutableMapping\n83: from http import cookiejar as cookielib\n84: from http.cookies import Morsel\n85: from io import StringIO\n86: \n87: # --------------\n88: # Legacy Imports\n89: # --------------\n90: from urllib.parse import ("
+      },
+      {
+        "file": "src/requests/compat.py",
+        "line": 107,
+        "severity": "medium",
+        "issue": "`basestring` is a Python 2-only type that doesn't exist in Python 3 and will raise `NameError` if accessed.",
+        "suggestion": "Remove `basestring` entirely. If it was used for `isinstance(x, basestring)` checks, those should be `isinstance(x, str)` in Python 3 only code.",
+        "snippet": "101: )\n102: from urllib.request import (\n103:     getproxies,\n104:     getproxies_environment,\n105:     parse_http_list,\n106:     proxy_bypass,\n107:     proxy_bypass_environment,  # type: ignore[attr-defined]  # https://github.com/python/cpython/issues/145331\n108: )\n109: \n110: builtin_str = str\n111: str = str\n112: bytes = bytes\n113: basestring = (str, bytes)"
+      },
+      {
+        "file": "src/requests/cookies.py",
+        "line": 464,
+        "severity": "medium",
+        "issue": "In cookiejar_from_dict, variable 'names_from_jar' is computed as a list but could be replaced with a set for O(1) lookup time instead of O(n).",
+        "suggestion": "Change 'names_from_jar = [cookie.name for cookie in cookiejar]' to 'names_from_jar = {cookie.name for cookie in cookiejar}' and update the check to 'if overwrite or (name not in names_from_jar)'",
+        "snippet": "458:         state.pop(\"_cookies_lock\")\n459:         return state\n460: \n461:     def __setstate__(self, state: dict[str, Any]) -> None:\n462:         \"\"\"Unlike a normal CookieJar, this class is pickleable.\"\"\"\n463:         self.__dict__.update(state)\n464:         if \"_cookies_lock\" not in self.__dict__:\n465:             self._cookies_lock = threading.RLock()\n466: \n467:     def copy(self) -> RequestsCookieJar:\n468:         \"\"\"Return a copy of this RequestsCookieJar.\"\"\"\n469:         new_cj = RequestsCookieJar()\n470:         new_cj.set_policy(self.get_policy())"
+      },
+      {
+        "file": "src/requests/cookies.py",
+        "line": 505,
+        "severity": "medium",
+        "issue": "In merge_cookies, when adding cookies from a CookieJar without an update method, cookies are added directly without copying, which could lead to shared reference issues if the source jar is modified.",
+        "suggestion": "Use copy.copy(cookie) when calling set_cookie, similar to how it's done in _copy_cookie_jar: 'cookiejar.set_cookie(copy.copy(cookie_in_jar))'",
+        "snippet": "499:     \"\"\"\n500:     result: dict[str, Any] = {\n501:         \"version\": 0,\n502:         \"name\": name,\n503:         \"value\": value,\n504:         \"port\": None,\n505:         \"domain\": \"\",\n506:         \"path\": \"/\",\n507:         \"secure\": False,\n508:         \"expires\": None,\n509:         \"discard\": True,\n510:         \"comment\": None,\n511:         \"comment_url\": None,"
+      },
+      {
+        "file": "src/requests/exceptions.py",
+        "line": null,
+        "severity": "medium",
+        "issue": "ContentDecodingError inherits from BaseHTTPError (urllib3.HTTPError) but doesn't initialize it, which may cause issues with exception chaining and introspection.",
+        "suggestion": "Add BaseHTTPError initialization: add `BaseHTTPError.__init__(self, *args)` call in __init__, or ensure args are passed through super().__init__().",
+        "snippet": "1: \"\"\"\n2: requests.exceptions\n3: ~~~~~~~~~~~~~~~~~~~\n4: \n5: This module contains the set of Requests' exceptions.\n6: \"\"\"\n7: \n8: from __future__ import annotations\n9: \n10: from typing import TYPE_CHECKING, Any\n11: \n12: from urllib3.exceptions import HTTPError as BaseHTTPError"
+      },
+      {
+        "file": "src/requests/exceptions.py",
+        "line": 82,
+        "severity": "medium",
+        "issue": "MissingSchema, InvalidSchema, InvalidURL, InvalidHeader, and InvalidProxyURL inherit from ValueError but don't initialize it, leaving the base class in an inconsistent state.",
+        "suggestion": "Add ValueError initialization: add `ValueError.__init__(self, *args)` call in __init__, or pass args to super().__init__() chain.",
+        "snippet": "76: \n77: \n78: class SSLError(ConnectionError):\n79:     \"\"\"An SSL error occurred.\"\"\"\n80: \n81: \n82: class Timeout(RequestException):\n83:     \"\"\"The request timed out.\n84: \n85:     Catching this error will catch both\n86:     :exc:`~requests.exceptions.ConnectTimeout` and\n87:     :exc:`~requests.exceptions.ReadTimeout` errors.\n88:     \"\"\""
+      },
+      {
+        "file": "src/requests/exceptions.py",
+        "line": 110,
+        "severity": "medium",
+        "issue": "StreamConsumedError inherits from TypeError but doesn't initialize it, potentially causing issues with exception handling and pickling.",
+        "suggestion": "Add TypeError initialization: add `TypeError.__init__(self, *args)` call in __init__, or ensure args are passed through super().__init__().",
+        "snippet": "104: \n105: \n106: class TooManyRedirects(RequestException):\n107:     \"\"\"Too many redirects.\"\"\"\n108: \n109: \n110: class MissingSchema(RequestException, ValueError):\n111:     \"\"\"The URL scheme (e.g. http or https) is missing.\"\"\"\n112: \n113: \n114: class InvalidSchema(RequestException, ValueError):\n115:     \"\"\"The URL scheme provided is either invalid or unsupported.\"\"\"\n116: "
+      },
+      {
+        "file": "src/requests/hooks.py",
+        "line": 18,
+        "severity": "medium",
+        "issue": "HOOKS is defined as a mutable list but represents a fixed set of constants.",
+        "suggestion": "Use a tuple instead for immutability: `HOOKS: tuple[str, ...] = (\"response\",)`. Tuples are preferred for constant sequences.",
+        "snippet": "12: \n13: from __future__ import annotations\n14: \n15: from collections.abc import Callable, Iterable\n16: from typing import TYPE_CHECKING, Any\n17: \n18: if TYPE_CHECKING:\n19:     from . import _types as _t\n20:     from .models import Response\n21: \n22: HOOKS: list[str] = [\"response\"]\n23: \n24: "
+      },
+      {
+        "file": "src/requests/packages.py",
+        "line": null,
+        "severity": "medium",
+        "issue": "Use of `locals()` to set module attributes is fragile and non-idiomatic. This pattern may not work correctly due to Python's local variable optimization.",
+        "suggestion": "Use explicit attribute assignment instead, e.g., `globals()[package] = __import__(package)` or maintain a dictionary mapping package names to their imported modules.",
+        "snippet": "1: import sys\n2: \n3: from .compat import chardet\n4: \n5: # This code exists for backwards compatibility reasons.\n6: # I don't like it either. Just look the other way. :)\n7: \n8: for package in (\"urllib3\", \"idna\"):\n9:     locals()[package] = __import__(package)\n10:     # This traversal is apparently necessary such that the identities are\n11:     # preserved (requests.packages.urllib3.* is urllib3.*)\n12:     for mod in list(sys.modules):"
+      },
+      {
+        "file": "src/requests/packages.py",
+        "line": null,
+        "severity": "medium",
+        "issue": "No error handling for failed imports. If 'urllib3' or 'idna' packages are not installed, `__import__` will raise an `ImportError`.",
+        "suggestion": "Wrap the import in a try-except block to handle missing dependencies gracefully or document that these are required dependencies.",
+        "snippet": "1: import sys\n2: \n3: from .compat import chardet\n4: \n5: # This code exists for backwards compatibility reasons.\n6: # I don't like it either. Just look the other way. :)\n7: \n8: for package in (\"urllib3\", \"idna\"):\n9:     locals()[package] = __import__(package)\n10:     # This traversal is apparently necessary such that the identities are\n11:     # preserved (requests.packages.urllib3.* is urllib3.*)\n12:     for mod in list(sys.modules):"
+      },
+      {
+        "file": "src/requests/sessions.py",
+        "line": null,
+        "severity": "medium",
+        "issue": "Deprecated type builtin usage for dict_class parameter",
+        "suggestion": "Use modern typing syntax: `dict_class: type[dict[str, Any]] = OrderedDict` or import `Dict` from typing and use `dict_class: type[Dict[str, Any]]`.",
+        "snippet": "1: \"\"\"\n2: requests.sessions\n3: ~~~~~~~~~~~~~~~~~\n4: \n5: This module provides a Session object to manage and persist settings across\n6: requests (cookies, auth, proxies).\n7: \"\"\"\n8: \n9: from __future__ import annotations\n10: \n11: import os\n12: import sys"
+      },
+      {
+        "file": "src/requests/status_codes.py",
+        "line": 64,
+        "severity": "medium",
+        "issue": "The name 'precondition' is mapped to both status code 412 (precondition_failed) and 428 (precondition_required), causing `codes.precondition` to always resolve to 428 (the last one set).",
+        "suggestion": "Remove 'precondition' from either entry 412 or 428. Consider keeping it only on 428 since that is the newer, more specific code for when preconditions are required.",
+        "snippet": "58:     403: (\"forbidden\",),\n59:     404: (\"not_found\", \"-o-\"),\n60:     405: (\"method_not_allowed\", \"not_allowed\"),\n61:     406: (\"not_acceptable\",),\n62:     407: (\"proxy_authentication_required\", \"proxy_auth\", \"proxy_authentication\"),\n63:     408: (\"request_timeout\", \"timeout\"),\n64:     409: (\"conflict\",),\n65:     410: (\"gone\",),\n66:     411: (\"length_required\",),\n67:     412: (\"precondition_failed\", \"precondition\"),\n68:     413: (\"request_entity_too_large\", \"content_too_large\"),\n69:     414: (\"request_uri_too_large\", \"uri_too_long\"),\n70:     415: (\"unsupported_media_type\", \"unsupported_media\", \"media_type\"),"
+      },
+      {
+        "file": "docs/_themes/flask_theme_support.py",
+        "line": null,
+        "severity": "low",
+        "issue": "This file is a Flask-specific documentation theme (vendored from Flask). The requests library appears to use Flask's Sphinx theme for its documentation. This is not a bug but worth noting this is not requests-specific code.",
+        "suggestion": "If maintaining a custom theme is not necessary, consider using Flask-Sphinx-theme as a dependency instead of vendoring it. Ensure this theme is properly credited if it remains vendored.",
+        "snippet": "1: # flasky extensions.  flasky pygments style based on tango style\n2: from pygments.style import Style\n3: from pygments.token import Keyword, Name, Comment, String, Error, \\\n4:      Number, Operator, Generic, Whitespace, Punctuation, Other, Literal\n5: \n6: \n7: class FlaskyStyle(Style):\n8:     background_color = \"#f8f8f8\"\n9:     default_style = \"\"\n10: \n11:     styles = {\n12:         # No corresponding class for the following:"
+      },
+      {
+        "file": "docs/_themes/flask_theme_support.py",
+        "line": null,
+        "severity": "low",
+        "issue": "The import `from pygments.token import Keyword, Name, Comment, String, Error, Number, Operator, Generic, Whitespace, Punctuation, Other, Literal` imports many tokens but not all are directly used as class references in the code—they are only used in the styles dictionary keys as string values.",
+        "suggestion": "The import can be simplified to just `from pygments.token import Keyword, Name, Comment, String, Error, Number, Operator, Generic, Whitespace, Punctuation, Other, Literal` which is already done. No action needed unless you want to remove unused imports that are only referenced as string literals.",
+        "snippet": "1: # flasky extensions.  flasky pygments style based on tango style\n2: from pygments.style import Style\n3: from pygments.token import Keyword, Name, Comment, String, Error, \\\n4:      Number, Operator, Generic, Whitespace, Punctuation, Other, Literal\n5: \n6: \n7: class FlaskyStyle(Style):\n8:     background_color = \"#f8f8f8\"\n9:     default_style = \"\"\n10: \n11:     styles = {\n12:         # No corresponding class for the following:"
+      },
+      {
+        "file": "docs/conf.py",
+        "line": null,
+        "severity": "low",
+        "issue": "Importing entire requests module just to access __version__",
+        "suggestion": "For faster documentation builds, consider reading the version from a separate version file or pyproject.toml instead of importing the entire requests package, which can trigger additional imports and increase build time.",
+        "snippet": "1: # -*- coding: utf-8 -*-\n2: #\n3: # Requests documentation build configuration file, created by\n4: # sphinx-quickstart on Fri Feb 19 00:05:47 2016.\n5: #\n6: # This file is execfile()d with the current directory set to its\n7: # containing dir.\n8: #\n9: # Note that not all possible configuration values are present in this\n10: # autogenerated file.\n11: #\n12: # All configuration values have a default; values that are commented out"
+      },
+      {
+        "file": "docs/conf.py",
+        "line": null,
+        "severity": "low",
+        "issue": "Unicode literal prefix (u'') is unnecessary in Python 3",
+        "suggestion": "Remove the u prefix from strings like `u\"Requests\"`, `u\"Kenneth Reitz and contributors\"` and `u\"Kenneth Reitz\"`. This is stylistic but improves consistency with modern Python 3 code.",
+        "snippet": "1: # -*- coding: utf-8 -*-\n2: #\n3: # Requests documentation build configuration file, created by\n4: # sphinx-quickstart on Fri Feb 19 00:05:47 2016.\n5: #\n6: # This file is execfile()d with the current directory set to its\n7: # containing dir.\n8: #\n9: # Note that not all possible configuration values are present in this\n10: # autogenerated file.\n11: #\n12: # All configuration values have a default; values that are commented out"
+      },
+      {
+        "file": "docs/conf.py",
+        "line": 1,
+        "severity": "low",
+        "issue": "Unnecessary Python 2 encoding declaration",
+        "suggestion": "Remove `# -*- coding: utf-8 -*-` as it has no effect in Python 3 (UTF-8 is the default encoding).",
+        "snippet": "1: # -*- coding: utf-8 -*-\n2: #\n3: # Requests documentation build configuration file, created by\n4: # sphinx-quickstart on Fri Feb 19 00:05:47 2016.\n5: #\n6: # This file is execfile()d with the current directory set to its\n7: # containing dir."
+      },
+      {
+        "file": "docs/conf.py",
+        "line": 27,
+        "severity": "low",
+        "issue": "Theme path _themes added but never used",
+        "suggestion": "Either remove the line `sys.path.insert(0, os.path.abspath(\"_themes\"))` if custom themes aren't needed, or ensure the custom theme is properly utilized.",
+        "snippet": "21: # sys.path.insert(0, os.path.abspath('.'))\n22: \n23: # Insert Requests' path into the system.\n24: sys.path.insert(0, os.path.abspath(\"..\"))\n25: sys.path.insert(0, os.path.abspath(\"_themes\"))\n26: \n27: import requests\n28: \n29: \n30: # -- General configuration ------------------------------------------------\n31: \n32: # If your documentation needs a minimal Sphinx version, state it here.\n33: # needs_sphinx = '1.0'"
+      },
+      {
+        "file": "src/requests/__init__.py",
+        "line": 90,
+        "severity": "low",
+        "issue": "Function _check_cryptography lacks type annotation for the cryptography_version parameter.",
+        "suggestion": "Add type hint: def _check_cryptography(cryptography_version: str) -> None:",
+        "snippet": "84:         # chardet_version >= 3.0.2, < 8.0.0\n85:         assert (3, 0, 2) <= (major, minor, patch) < (8, 0, 0)\n86:     elif charset_normalizer_version:\n87:         major, minor, patch = charset_normalizer_version.split(\".\")[:3]\n88:         major, minor, patch = int(major), int(minor), int(patch)\n89:         # charset_normalizer >= 2.0.0 < 4.0.0\n90:         assert (2, 0, 0) <= (major, minor, patch) < (4, 0, 0)\n91:     else:\n92:         warnings.warn(\n93:             \"Unable to find acceptable character detection dependency \"\n94:             \"(chardet or charset_normalizer).\",\n95:             RequestsDependencyWarning,\n96:         )"
+      },
+      {
+        "file": "src/requests/__init__.py",
+        "line": 119,
+        "severity": "low",
+        "issue": "Logging import placed after conditional logic, violating PEP 8 import ordering conventions.",
+        "suggestion": "Move 'import logging' and 'from logging import NullHandler' to the top of the file with other standard library imports.",
+        "snippet": "113:     check_compatibility(\n114:         urllib3.__version__,\n115:         chardet_version,\n116:         charset_normalizer_version,\n117:     )\n118: except (AssertionError, ValueError):\n119:     warnings.warn(\n120:         f\"urllib3 ({urllib3.__version__}) or chardet \"\n121:         f\"({chardet_version})/charset_normalizer ({charset_normalizer_version}) \"\n122:         \"doesn't match a supported version!\",\n123:         RequestsDependencyWarning,\n124:     )\n125: "
+      },
+      {
+        "file": "src/requests/__init__.py",
+        "line": 162,
+        "severity": "low",
+        "issue": "FileModeWarning is imported and used but omitted from __all__ exports.",
+        "suggestion": "Add 'FileModeWarning' to the __all__ tuple to maintain consistency with other public exports.",
+        "snippet": "156: from logging import NullHandler\n157: \n158: from . import packages, utils\n159: from .__version__ import (\n160:     __author__,\n161:     __author_email__,\n162:     __build__,\n163:     __cake__,\n164:     __copyright__,\n165:     __description__,\n166:     __license__,\n167:     __title__,\n168:     __url__,"
+      },
+      {
+        "file": "src/requests/_internal_utils.py",
+        "line": null,
+        "severity": "low",
+        "issue": "The `unicode_is_ascii` function is missing type hints for its parameter and return type, unlike the nearby `to_native_string` function which has them.",
+        "suggestion": "Add type hints: `def unicode_is_ascii(u_string: str) -> bool:`",
+        "snippet": "1: \"\"\"\n2: requests._internal_utils\n3: ~~~~~~~~~~~~~~\n4: \n5: Provides utility functions that are consumed internally by Requests\n6: which depend on extremely few external helpers (such as compat)\n7: \"\"\"\n8: \n9: import re\n10: \n11: from .compat import builtin_str\n12: "
+      },
+      {
+        "file": "src/requests/_internal_utils.py",
+        "line": 40,
+        "severity": "low",
+        "issue": "The docstring references Python 2 behavior ('not Python 2 `str`'), but the project only supports Python 3.10+. This is outdated and potentially confusing.",
+        "suggestion": "Remove the Python 2 reference from the docstring. The function signature already documents that a `str` is expected.",
+        "snippet": "34:         out = string.decode(encoding)\n35: \n36:     return out\n37: \n38: \n39: def unicode_is_ascii(u_string: str) -> bool:\n40:     \"\"\"Determine if unicode string only contains ASCII characters.\n41: \n42:     :param str u_string: unicode string to check. Must be unicode\n43:         and not Python 2 `str`.\n44:     :rtype: bool\n45:     \"\"\"\n46:     assert isinstance(u_string, str)"
+      },
+      {
+        "file": "src/requests/_types.py",
+        "line": null,
+        "severity": "low",
+        "issue": "Duplicate import: `TypeAlias` is imported at line 10 from `typing` and again at line 80 inside `TYPE_CHECKING` from `typing`. The second import is redundant.",
+        "suggestion": "Remove the duplicate `TypeAlias` import from the TYPE_CHECKING block since it's already available from the module-level import.",
+        "snippet": "1: \"\"\"\n2: requests._types\n3: ~~~~~~~~~~~~~~~\n4: \n5: This module contains type aliases used internally by the Requests library.\n6: These types are not part of the public API and must not be relied upon\n7: by external code.\n8: \"\"\"\n9: \n10: from __future__ import annotations\n11: \n12: from collections.abc import Callable, Iterable, Mapping, MutableMapping, Sequence"
+      },
+      {
+        "file": "src/requests/_types.py",
+        "line": 29,
+        "severity": "low",
+        "issue": "The `# type: ignore[reportIncompatibleVariableOverride]` comments suppress mypy errors for `_ValidatedRequest`. While documented in comments, this pattern is fragile and relies on mypy-specific behavior.",
+        "suggestion": "Consider using `# type: ignore[assignment]` for better clarity, or document the suppression reason in a more visible location if this is an intentional pattern used elsewhere in the codebase.",
+        "snippet": "23: _KT_co = TypeVar(\"_KT_co\", covariant=True)\n24: _VT_co = TypeVar(\"_VT_co\", covariant=True)\n25: \n26: \n27: @runtime_checkable\n28: class SupportsRead(Protocol[_T_co]):\n29:     def read(self, length: int = ..., /) -> _T_co: ...\n30: \n31: \n32: def has_read(obj: Any) -> TypeIs[SupportsRead[str | bytes]]:\n33:     \"\"\"Check if obj supports read, including __getattr__ based proxies.\"\"\"\n34:     return isinstance(obj, SupportsRead) or hasattr(obj, \"read\")\n35: "
+      },
+      {
+        "file": "src/requests/adapters.py",
+        "line": null,
+        "severity": "low",
+        "issue": "The `socket` module is imported but never used. The `# noqa: F401` comment indicates this was previously needed but is now dead code.",
+        "suggestion": "Remove the unused `import socket` statement to clean up the codebase.",
+        "snippet": "1: \"\"\"\n2: requests.adapters\n3: ~~~~~~~~~~~~~~~~~\n4: \n5: This module contains the transport adapters that Requests uses to define\n6: and maintain connections.\n7: \"\"\"\n8: \n9: from __future__ import annotations\n10: \n11: import os.path\n12: import socket  # noqa: F401"
+      },
+      {
+        "file": "src/requests/adapters.py",
+        "line": 272,
+        "severity": "low",
+        "issue": "The `ResponseError` exception from urllib3 is caught, but this exception class may not be raised by current versions of urllib3 in the context expected.",
+        "suggestion": "Verify that `ResponseError` is still a valid exception that can be raised in this context, or remove this specific check if it's dead code.",
+        "snippet": "266:             **pool_kwargs,\n267:         )\n268: \n269:     def proxy_manager_for(self, proxy: str, **proxy_kwargs: Any) -> Any:\n270:         \"\"\"Return urllib3 ProxyManager for the given proxy.\n271: \n272:         This method should not be called from user code, and is only\n273:         exposed for use when subclassing the\n274:         :class:`HTTPAdapter <requests.adapters.HTTPAdapter>`.\n275: \n276:         :param proxy: The proxy to return a urllib3 ProxyManager for.\n277:         :param proxy_kwargs: Extra keyword arguments used to configure the Proxy Manager.\n278:         :returns: ProxyManager"
+      },
+      {
+        "file": "src/requests/adapters.py",
+        "line": 295,
+        "severity": "low",
+        "issue": "The `_ProxyError` exception is caught twice in the same try-except block - once at line 283 within the `MaxRetryError` handler and again at line 300 as a standalone handler. This redundancy is confusing.",
+        "suggestion": "Consider removing the duplicate handler or restructuring the exception handling for clarity.",
+        "snippet": "289:                 num_pools=self._pool_connections,\n290:                 maxsize=self._pool_maxsize,\n291:                 block=self._pool_block,\n292:                 **proxy_kwargs,\n293:             )\n294:         else:\n295:             proxy_headers = self.proxy_headers(proxy)\n296:             manager = self.proxy_manager[proxy] = proxy_from_url(\n297:                 proxy,\n298:                 proxy_headers=proxy_headers,\n299:                 num_pools=self._pool_connections,\n300:                 maxsize=self._pool_maxsize,\n301:                 block=self._pool_block,"
+      },
+      {
+        "file": "src/requests/adapters.py",
+        "line": 320,
+        "severity": "low",
+        "issue": "The `basestring` type is used for Python 2 compatibility, but the project requires Python 3.10+. This is legacy code that should be simplified.",
+        "suggestion": "Replace `basestring` with `str` since Python 2 compatibility is no longer needed.",
+        "snippet": "314:         :param conn: The urllib3 connection object associated with the cert.\n315:         :param url: The requested URL.\n316:         :param verify: Either a boolean, in which case it controls whether we verify\n317:             the server's TLS certificate, or a string, in which case it must be a path\n318:             to a CA bundle to use\n319:         :param cert: The SSL certificate to verify.\n320:         \"\"\"\n321:         if url.lower().startswith(\"https\") and verify:\n322:             cert_loc = None\n323: \n324:             # Allow self-specified cert location.\n325:             if verify is not True:\n326:                 cert_loc = verify"
+      },
+      {
+        "file": "src/requests/auth.py",
+        "line": 22,
+        "severity": "low",
+        "issue": "Duplicate import of Any: once at top-level and once in TYPE_CHECKING block",
+        "suggestion": "Remove the 'from typing import Any' line inside TYPE_CHECKING block since it's already imported at the module level.",
+        "snippet": "16: from base64 import b64encode\n17: from typing import TYPE_CHECKING, Any, Final, cast, overload\n18: \n19: from ._internal_utils import to_native_string\n20: from .compat import basestring, str, urlparse\n21: from .cookies import extract_cookies_to_jar\n22: from .utils import parse_dict_header\n23: \n24: if TYPE_CHECKING:\n25:     from http.cookiejar import CookieJar\n26:     from typing import Any\n27: \n28:     from .models import PreparedRequest, Response"
+      },
+      {
+        "file": "src/requests/auth.py",
+        "line": 88,
+        "severity": "low",
+        "issue": "__ne__ method uses 'not self == other' instead of direct inequality check",
+        "suggestion": "Use 'return any(self_attr != other_attr for ...)' or similar pattern for clarity and to avoid potential issues with __eq__ implementation.",
+        "snippet": "82:         raise NotImplementedError(\"Auth hooks must be callable.\")\n83: \n84: \n85: class HTTPBasicAuth(AuthBase):\n86:     \"\"\"Attaches HTTP Basic Authentication to the given Request object.\"\"\"\n87: \n88:     username: bytes | str\n89:     password: bytes | str\n90: \n91:     @overload\n92:     def __init__(self, username: str, password: str) -> None: ...\n93:     @overload\n94:     def __init__(self, username: bytes, password: bytes) -> None: ..."
+      },
+      {
+        "file": "src/requests/auth.py",
+        "line": 129,
+        "severity": "low",
+        "issue": "Class-level type annotations for instance attributes stored in threading.local are misleading",
+        "suggestion": "Move annotations like 'last_nonce', 'nonce_count', 'chal', 'pos', 'num_401_calls' to TYPE_CHECKING block or document that these are stored in _thread_local, not as direct attributes.",
+        "snippet": "123: \n124: class HTTPDigestAuth(AuthBase):\n125:     \"\"\"Attaches HTTP Digest Authentication to the given Request object.\"\"\"\n126: \n127:     username: bytes | str\n128:     password: bytes | str\n129:     _thread_local: threading.local\n130:     last_nonce: str\n131:     nonce_count: int\n132:     chal: dict[str, str]\n133:     pos: int | None\n134:     num_401_calls: int | None\n135: "
+      },
+      {
+        "file": "src/requests/auth.py",
+        "line": 228,
+        "severity": "low",
+        "issue": "Code comment 'XXX handle auth-int' indicates unimplemented auth-int qop support",
+        "suggestion": "Either implement auth-int support or add a clear comment that this is intentionally not supported, with guidance for users.",
+        "snippet": "222:         A2 = f\"{method}:{path}\"\n223: \n224:         HA1 = hash_utf8(A1)\n225:         HA2 = hash_utf8(A2)\n226: \n227:         if nonce == self._thread_local.last_nonce:\n228:             self._thread_local.nonce_count += 1\n229:         else:\n230:             self._thread_local.nonce_count = 1\n231:         ncvalue = f\"{self._thread_local.nonce_count:08x}\"\n232:         s = str(self._thread_local.nonce_count).encode(\"utf-8\")\n233:         s += nonce.encode(\"utf-8\")\n234:         s += time.ctime().encode(\"utf-8\")"
+      },
+      {
+        "file": "src/requests/auth.py",
+        "line": 248,
+        "severity": "low",
+        "issue": "Redundant None check: status code 401 is already filtered by the 400-500 range check",
+        "suggestion": "Simplify condition to 'if r.status_code != 401:' for clarity, since the 400-500 range already implies a 4xx error.",
+        "snippet": "242:             respdig = KD(HA1, f\"{nonce}:{HA2}\")\n243:         elif qop == \"auth\" or \"auth\" in qop.split(\",\"):\n244:             noncebit = f\"{nonce}:{ncvalue}:{cnonce}:auth:{HA2}\"\n245:             respdig = KD(HA1, noncebit)\n246:         else:\n247:             # XXX handle auth-int.\n248:             return None\n249: \n250:         self._thread_local.last_nonce = nonce\n251: \n252:         # XXX should the partial digests be encoded too?\n253:         base = (\n254:             f'username=\"{self.username}\", realm=\"{realm}\", nonce=\"{nonce}\", '"
+      },
+      {
+        "file": "src/requests/certs.py",
+        "line": 1,
+        "severity": "low",
+        "issue": "Shebang line is unnecessary for an importable module. It only affects execution via `python src/requests/certs.py` but the module is primarily used via import.",
+        "suggestion": "Remove `#!/usr/bin/env python` if this file is never meant to be executed directly as a script.",
+        "snippet": "1: #!/usr/bin/env python\n2: \n3: \"\"\"\n4: requests.certs\n5: ~~~~~~~~~~~~~~\n6: \n7: This module returns the preferred default CA certificate bundle. There is"
+      },
+      {
+        "file": "src/requests/compat.py",
+        "line": 31,
+        "severity": "low",
+        "issue": "The `_resolve_char_detection()` function has misleading logic. The `if chardet is None:` check inside the loop is always true on the first iteration since `chardet` starts as `None`.",
+        "suggestion": "Simplify the function to: `return importlib.import_module('charset_normalizer') if importlib.util.find_spec('charset_normalizer') else importlib.import_module('chardet')` with proper try/except handling.",
+        "snippet": "25: try:\n26:     is_urllib3_1 = int(urllib3_version.split(\".\")[0]) == 1\n27: except (TypeError, AttributeError):\n28:     # If we can't discern a version, prefer old functionality.\n29:     is_urllib3_1 = True\n30: \n31: # -------------------\n32: # Character Detection\n33: # -------------------\n34: \n35: \n36: def _resolve_char_detection() -> ModuleType | None:\n37:     \"\"\"Find supported character detection libraries.\"\"\""
+      },
+      {
+        "file": "src/requests/compat.py",
+        "line": 95,
+        "severity": "low",
+        "issue": "The variable `is_py2` is defined but never used. Python 2 has been end-of-life since 2020 and this project requires Python 3.10+.",
+        "suggestion": "Remove `is_py2` and `is_py3` variables as they serve no purpose in a Python 3.10+ codebase.",
+        "snippet": "89: # --------------\n90: from urllib.parse import (\n91:     quote,\n92:     quote_plus,\n93:     unquote,\n94:     unquote_plus,\n95:     urldefrag,\n96:     urlencode,\n97:     urljoin,\n98:     urlparse,\n99:     urlsplit,\n100:     urlunparse,\n101: )"
+      },
+      {
+        "file": "src/requests/compat.py",
+        "line": 96,
+        "severity": "low",
+        "issue": "The variable `is_py3` is defined but never used.",
+        "suggestion": "Remove `is_py2` and `is_py3` variables as they serve no purpose in a Python 3.10+ codebase.",
+        "snippet": "90: from urllib.parse import (\n91:     quote,\n92:     quote_plus,\n93:     unquote,\n94:     unquote_plus,\n95:     urldefrag,\n96:     urlencode,\n97:     urljoin,\n98:     urlparse,\n99:     urlsplit,\n100:     urlunparse,\n101: )\n102: from urllib.request import ("
+      },
+      {
+        "file": "src/requests/compat.py",
+        "line": 106,
+        "severity": "low",
+        "issue": "Reassignments `str = str`, `bytes = bytes`, and `builtin_str = str` are redundant no-ops that add noise.",
+        "suggestion": "Remove these pointless reassignments. If `builtin_str` was intended for Python 2/3 compatibility, it can be removed entirely now.",
+        "snippet": "100:     urlunparse,\n101: )\n102: from urllib.request import (\n103:     getproxies,\n104:     getproxies_environment,\n105:     parse_http_list,\n106:     proxy_bypass,\n107:     proxy_bypass_environment,  # type: ignore[attr-defined]  # https://github.com/python/cpython/issues/145331\n108: )\n109: \n110: builtin_str = str\n111: str = str\n112: bytes = bytes"
+      },
+      {
+        "file": "src/requests/compat.py",
+        "line": 108,
+        "severity": "low",
+        "issue": "`numeric_types` and `integer_types` are defined but never used in the file.",
+        "suggestion": "Remove these unused variables to reduce dead code.",
+        "snippet": "102: from urllib.request import (\n103:     getproxies,\n104:     getproxies_environment,\n105:     parse_http_list,\n106:     proxy_bypass,\n107:     proxy_bypass_environment,  # type: ignore[attr-defined]  # https://github.com/python/cpython/issues/145331\n108: )\n109: \n110: builtin_str = str\n111: str = str\n112: bytes = bytes\n113: basestring = (str, bytes)\n114: numeric_types = (int, float)"
+      },
+      {
+        "file": "src/requests/cookies.py",
+        "line": null,
+        "severity": "low",
+        "issue": "Import 'threading' is placed after class definitions instead of with other imports at the top of the file, reducing code readability.",
+        "suggestion": "Move 'import threading' to the imports section at the top of the file with other standard library imports.",
+        "snippet": "1: \"\"\"\n2: requests.cookies\n3: ~~~~~~~~~~~~~~~~\n4: \n5: Compatibility code to be able to use `http.cookiejar.CookieJar` with requests.\n6: \n7: requests.utils imports from here, so be careful with imports.\n8: \"\"\"\n9: \n10: from __future__ import annotations\n11: \n12: import calendar"
+      },
+      {
+        "file": "src/requests/cookies.py",
+        "line": 403,
+        "severity": "low",
+        "issue": "Variable name 'toReturn' uses camelCase instead of Python's PEP 8 recommended snake_case naming convention.",
+        "suggestion": "Rename 'toReturn' to 'to_return' for consistency with Python style guidelines.",
+        "snippet": "397:                 self.set_cookie(copy.copy(cookie))\n398:         else:\n399:             super().update(other)\n400: \n401:     def _find(\n402:         self, name: str, domain: str | None = None, path: str | None = None\n403:     ) -> str | None:\n404:         \"\"\"Requests uses this method internally to get cookie values.\n405: \n406:         If there are conflicting cookies, _find arbitrarily chooses one.\n407:         See _find_no_duplicates if you want an exception thrown if there are\n408:         conflicting cookies.\n409: "
+      },
+      {
+        "file": "src/requests/exceptions.py",
+        "line": 46,
+        "severity": "low",
+        "issue": "JSONDecodeError.__init__ calls InvalidJSONError.__init__(self, *self.args, **kwargs) but CompatJSONDecodeError.__init__ may not accept **kwargs, causing potential TypeError.",
+        "suggestion": "Use a temporary variable to store args before first initialization: `args = args; CompatJSONDecodeError.__init__(self, *args); InvalidJSONError.__init__(self, *args, **kwargs)`",
+        "snippet": "40: \n41: \n42: class JSONDecodeError(InvalidJSONError, CompatJSONDecodeError):\n43:     \"\"\"Couldn't decode the text into json\"\"\"\n44: \n45:     def __init__(self, *args: Any, **kwargs: Any) -> None:\n46:         \"\"\"\n47:         Construct the JSONDecodeError instance first with all\n48:         args. Then use it's args to construct the IOError so that\n49:         the json specific args aren't used as IOError specific args\n50:         and the error message from JSONDecodeError is preserved.\n51:         \"\"\"\n52:         CompatJSONDecodeError.__init__(self, *args)"
+      },
+      {
+        "file": "src/requests/hooks.py",
+        "line": null,
+        "severity": "low",
+        "issue": "TODO comment indicates response is the only supported hook, but the implementation already supports arbitrary hook keys.",
+        "suggestion": "Either remove the TODO comment or document that the hook system is designed for extensibility.",
+        "snippet": "1: \"\"\"\n2: requests.hooks\n3: ~~~~~~~~~~~~~~\n4: \n5: This module provides the capabilities for the Requests hooks system.\n6: \n7: Available hooks:\n8: \n9: ``response``:\n10:     The response generated from a Request.\n11: \"\"\"\n12: "
+      },
+      {
+        "file": "src/requests/hooks.py",
+        "line": 33,
+        "severity": "low",
+        "issue": "The dispatch_hook function accepts a `key` parameter with no validation against allowed HOOKS values.",
+        "suggestion": "Consider validating that `key` exists in HOOKS, or document that keys are arbitrary strings for custom hook systems.",
+        "snippet": "27: \n28: \n29: # TODO: response is the only one\n30: \n31: \n32: def dispatch_hook(\n33:     key: str,\n34:     hooks: _t.HooksInputType | None,\n35:     hook_data: Response,\n36:     **kwargs: Any,\n37: ) -> Response:\n38:     \"\"\"Dispatches a hook dictionary on a given piece of data.\"\"\"\n39:     hooks_dict = hooks or {}"
+      },
+      {
+        "file": "src/requests/packages.py",
+        "line": null,
+        "severity": "low",
+        "issue": "This backwards compatibility module lacks a docstring explaining its purpose and the compatibility concerns it addresses.",
+        "suggestion": "Add a module-level docstring describing why this exists (legacy 'requests.packages.urllib3' access pattern) and why it shouldn't be used in new code.",
+        "snippet": "1: import sys\n2: \n3: from .compat import chardet\n4: \n5: # This code exists for backwards compatibility reasons.\n6: # I don't like it either. Just look the other way. :)\n7: \n8: for package in (\"urllib3\", \"idna\"):\n9:     locals()[package] = __import__(package)\n10:     # This traversal is apparently necessary such that the identities are\n11:     # preserved (requests.packages.urllib3.* is urllib3.*)\n12:     for mod in list(sys.modules):"
+      },
+      {
+        "file": "src/requests/packages.py",
+        "line": 17,
+        "severity": "low",
+        "issue": "Variable `mod` is used as loop variable but then reassigned inside the loop body, making the code confusing and potentially error-prone.",
+        "suggestion": "Use a separate variable for the transformed module name, e.g., `chardet_mod = mod.replace(target, 'chardet')` before the second assignment.",
+        "snippet": "11:     # preserved (requests.packages.urllib3.* is urllib3.*)\n12:     for mod in list(sys.modules):\n13:         if mod == package or mod.startswith(f\"{package}.\"):\n14:             sys.modules[f\"requests.packages.{mod}\"] = sys.modules[mod]\n15: \n16: if chardet is not None:\n17:     target = chardet.__name__\n18:     for mod in list(sys.modules):\n19:         if mod == target or mod.startswith(f\"{target}.\"):\n20:             imported_mod = sys.modules[mod]\n21:             sys.modules[f\"requests.packages.{mod}\"] = imported_mod\n22:             mod = mod.replace(target, \"chardet\")\n23:             sys.modules[f\"requests.packages.{mod}\"] = imported_mod"
+      },
+      {
+        "file": "src/requests/sessions.py",
+        "line": 24,
+        "severity": "low",
+        "issue": "Unused import",
+        "suggestion": "The `timedelta` import from datetime is not directly used in this file (it is used via `from datetime import timedelta` in line 24 but the actual usage is at line 739 where `timedelta(seconds=elapsed)` is created inline). Consider removing the unused import or using it consistently.",
+        "snippet": "18: \n19: from ._internal_utils import to_native_string\n20: from ._types import is_prepared as _is_prepared\n21: from .adapters import HTTPAdapter\n22: from .auth import _basic_auth_str\n23: from .compat import cookielib, urljoin, urlparse\n24: from .cookies import (\n25:     RequestsCookieJar,\n26:     cookiejar_from_dict,\n27:     extract_cookies_to_jar,\n28:     merge_cookies,\n29: )\n30: from .exceptions import ("
+      },
+      {
+        "file": "src/requests/sessions.py",
+        "line": 787,
+        "severity": "low",
+        "issue": "Redundant empty dict fallback for proxies",
+        "suggestion": "The line `proxies = proxies or {}` is redundant since `merge_setting(None, self.proxies)` already returns `self.proxies`. Consider removing it for clarity.",
+        "snippet": "781:         start = preferred_clock()\n782: \n783:         # Send the request\n784:         r = adapter.send(request, **kwargs)\n785: \n786:         # Total elapsed time of the request (approximately)\n787:         elapsed = preferred_clock() - start\n788:         r.elapsed = timedelta(seconds=elapsed)\n789: \n790:         # Response manipulation hooks\n791:         r = dispatch_hook(\"response\", hooks, r, **kwargs)\n792: \n793:         # Persist cookies"
+      },
+      {
+        "file": "src/requests/sessions.py",
+        "line": 820,
+        "severity": "low",
+        "issue": "Inefficient iteration pattern in mount() method",
+        "suggestion": "The list comprehension `keys_to_move = [k for k in self.adapters if len(k) < len(prefix)]` iterates over all adapters. Consider pre-sorting adapters by prefix length descending and breaking early when a shorter prefix is found, since adapters are maintained in descending length order.",
+        "snippet": "814:             r = history.pop()\n815:             r.history = history\n816: \n817:         # If redirects aren't being followed, store the response on the Request for Response.next().\n818:         if not allow_redirects:\n819:             try:\n820:                 r._next = next(  # type: ignore[assignment]  # yield_requests=True returns PreparedRequest\n821:                     self.resolve_redirects(r, request, yield_requests=True, **kwargs)\n822:                 )\n823:             except StopIteration:\n824:                 pass\n825: \n826:         if not stream:"
+      },
+      {
+        "file": "src/requests/sessions.py",
+        "line": 824,
+        "severity": "low",
+        "issue": "Potential iteration behavior issue if adapters dictionary changes during operation",
+        "suggestion": "While the current code is functionally correct, iterating over `self.adapters` while modifying it via pop() could be fragile. Consider iterating over a snapshot of keys: `for key in list(self.adapters.keys()):`",
+        "snippet": "818:         if not allow_redirects:\n819:             try:\n820:                 r._next = next(  # type: ignore[assignment]  # yield_requests=True returns PreparedRequest\n821:                     self.resolve_redirects(r, request, yield_requests=True, **kwargs)\n822:                 )\n823:             except StopIteration:\n824:                 pass\n825: \n826:         if not stream:\n827:             r.content\n828: \n829:         return r\n830: "
+      },
+      {
+        "file": "src/requests/status_codes.py",
+        "line": null,
+        "severity": "low",
+        "issue": "The module does not define `__all__`, making all module-level names part of the public API by default.",
+        "suggestion": "Add `__all__ = ['codes']` to explicitly declare the public API, preventing accidental exposure of private names like `_codes` and `_init`.",
+        "snippet": "1: r\"\"\"\n2: The ``codes`` object defines a mapping from common names for HTTP statuses\n3: to their numerical codes, accessible either as attributes or as dictionary\n4: items.\n5: \n6: Example::\n7: \n8:     >>> import requests\n9:     >>> requests.codes['temporary_redirect']\n10:     307\n11:     >>> requests.codes.teapot\n12:     418"
+      },
+      {
+        "file": "src/requests/status_codes.py",
+        "line": 82,
+        "severity": "low",
+        "issue": "The deprecated alias 'too_early' for status code 425 is still present in the tuple despite being noted as deprecated.",
+        "suggestion": "Remove 'too_early' from the 425 entry tuple. It was an early draft name for the 425 status code and should be removed for clarity.",
+        "snippet": "76:     417: (\"expectation_failed\",),\n77:     418: (\"im_a_teapot\", \"teapot\", \"i_am_a_teapot\"),\n78:     421: (\"misdirected_request\",),\n79:     422: (\"unprocessable_entity\", \"unprocessable\", \"unprocessable_content\"),\n80:     423: (\"locked\",),\n81:     424: (\"failed_dependency\", \"dependency\"),\n82:     425: (\"unordered_collection\", \"unordered\", \"too_early\"),\n83:     426: (\"upgrade_required\", \"upgrade\"),\n84:     428: (\"precondition_required\", \"precondition\"),\n85:     429: (\"too_many_requests\", \"too_many\"),\n86:     431: (\"header_fields_too_large\", \"fields_too_large\"),\n87:     444: (\"no_response\", \"none\"),\n88:     449: (\"retry_with\", \"retry\"),"
+      }
+    ],
+    "skipped_files": [
+      {
+        "path": ".coveragerc",
+        "reason": "binary or unsupported file type"
+      },
+      {
+        "path": ".git/HEAD",
+        "reason": "ignored pattern"
+      },
+      {
+        "path": ".git/config",
+        "reason": "ignored pattern"
+      },
+      {
+        "path": ".git/description",
+        "reason": "ignored pattern"
+      },
+      {
+        "path": ".git/hooks/applypatch-msg.sample",
+        "reason": "ignored pattern"
+      },
+      {
+        "path": ".git/hooks/commit-msg.sample",
+        "reason": "ignored pattern"
+      },
+      {
+        "path": ".git/hooks/fsmonitor-watchman.sample",
+        "reason": "ignored pattern"
+      },
+      {
+        "path": ".git/hooks/post-update.sample",
+        "reason": "ignored pattern"
+      },
+      {
+        "path": ".git/hooks/pre-applypatch.sample",
+        "reason": "ignored pattern"
+      },
+      {
+        "path": ".git/hooks/pre-commit.sample",
+        "reason": "ignored pattern"
+      },
+      {
+        "path": ".git/hooks/pre-merge-commit.sample",
+        "reason": "ignored pattern"
+      },
+      {
+        "path": ".git/hooks/pre-push.sample",
+        "reason": "ignored pattern"
+      },
+      {
+        "path": ".git/hooks/pre-rebase.sample",
+        "reason": "ignored pattern"
+      },
+      {
+        "path": ".git/hooks/pre-receive.sample",
+        "reason": "ignored pattern"
+      },
+      {
+        "path": ".git/hooks/prepare-commit-msg.sample",
+        "reason": "ignored pattern"
+      },
+      {
+        "path": ".git/hooks/push-to-checkout.sample",
+        "reason": "ignored pattern"
+      },
+      {
+        "path": ".git/hooks/sendemail-validate.sample",
+        "reason": "ignored pattern"
+      },
+      {
+        "path": ".git/hooks/update.sample",
+        "reason": "ignored pattern"
+      },
+      {
+        "path": ".git/index",
+        "reason": "ignored pattern"
+      },
+      {
+        "path": ".git/info/exclude",
+        "reason": "ignored pattern"
+      },
+      {
+        "path": ".git/logs/HEAD",
+        "reason": "ignored pattern"
+      },
+      {
+        "path": ".git/logs/refs/heads/main",
+        "reason": "ignored pattern"
+      },
+      {
+        "path": ".git/logs/refs/remotes/origin/HEAD",
+        "reason": "ignored pattern"
+      },
+      {
+        "path": ".git/objects/pack/pack-cb635078b78f05060906dfd10ff85f871a4a1597.idx",
+        "reason": "ignored pattern"
+      },
+      {
+        "path": ".git/objects/pack/pack-cb635078b78f05060906dfd10ff85f871a4a1597.pack",
+        "reason": "ignored pattern"
+      },
+      {
+        "path": ".git/objects/pack/pack-cb635078b78f05060906dfd10ff85f871a4a1597.rev",
+        "reason": "ignored pattern"
+      },
+      {
+        "path": ".git/packed-refs",
+        "reason": "ignored pattern"
+      },
+      {
+        "path": ".git/refs/heads/main",
+        "reason": "ignored pattern"
+      },
+      {
+        "path": ".git/refs/remotes/origin/HEAD",
+        "reason": "ignored pattern"
+      },
+      {
+        "path": ".git/shallow",
+        "reason": "ignored pattern"
+      },
+      {
+        "path": ".git-blame-ignore-revs",
+        "reason": "binary or unsupported file type"
+      },
+      {
+        "path": ".github/CODEOWNERS",
+        "reason": "binary or unsupported file type"
+      },
+      {
+        "path": ".gitignore",
+        "reason": "binary or unsupported file type"
+      },
+      {
+        "path": "AUTHORS.rst",
+        "reason": "binary or unsupported file type"
+      },
+      {
+        "path": "HISTORY.md",
+        "reason": "file too large (64563 bytes)"
+      },
+      {
+        "path": "LICENSE",
+        "reason": "binary or unsupported file type"
+      },
+      {
+        "path": "MANIFEST.in",
+        "reason": "binary or unsupported file type"
+      },
+      {
+        "path": "Makefile",
+        "reason": "binary or unsupported file type"
+      },
+      {
+        "path": "NOTICE",
+        "reason": "binary or unsupported file type"
+      },
+      {
+        "path": "docs/.nojekyll",
+        "reason": "binary or unsupported file type"
+      },
+      {
+        "path": "docs/Makefile",
+        "reason": "binary or unsupported file type"
+      },
+      {
+        "path": "docs/_static/requests-sidebar.png",
+        "reason": "ignored pattern"
+      },
+      {
+        "path": "docs/_themes/.gitignore",
+        "reason": "binary or unsupported file type"
+      },
+      {
+        "path": "docs/_themes/LICENSE",
+        "reason": "binary or unsupported file type"
+      },
+      {
+        "path": "docs/api.rst",
+        "reason": "binary or unsupported file type"
+      },
+      {
+        "path": "docs/community/faq.rst",
+        "reason": "binary or unsupported file type"
+      },
+      {
+        "path": "docs/community/out-there.rst",
+        "reason": "binary or unsupported file type"
+      },
+      {
+        "path": "docs/community/recommended.rst",
+        "reason": "binary or unsupported file type"
+      },
+      {
+        "path": "docs/community/release-process.rst",
+        "reason": "binary or unsupported file type"
+      },
+      {
+        "path": "docs/community/support.rst",
+        "reason": "binary or unsupported file type"
+      },
+      {
+        "path": "docs/community/updates.rst",
+        "reason": "binary or unsupported file type"
+      },
+      {
+        "path": "docs/community/vulnerabilities.rst",
+        "reason": "binary or unsupported file type"
+      },
+      {
+        "path": "docs/dev/authors.rst",
+        "reason": "binary or unsupported file type"
+      },
+      {
+        "path": "docs/dev/contributing.rst",
+        "reason": "binary or unsupported file type"
+      },
+      {
+        "path": "docs/index.rst",
+        "reason": "binary or unsupported file type"
+      },
+      {
+        "path": "docs/make.bat",
+        "reason": "binary or unsupported file type"
+      },
+      {
+        "path": "docs/user/advanced.rst",
+        "reason": "binary or unsupported file type"
+      },
+      {
+        "path": "docs/user/authentication.rst",
+        "reason": "binary or unsupported file type"
+      },
+      {
+        "path": "docs/user/install.rst",
+        "reason": "binary or unsupported file type"
+      },
+      {
+        "path": "docs/user/quickstart.rst",
+        "reason": "binary or unsupported file type"
+      },
+      {
+        "path": "ext/LICENSE",
+        "reason": "binary or unsupported file type"
+      },
+      {
+        "path": "ext/kr.png",
+        "reason": "ignored pattern"
+      },
+      {
+        "path": "ext/psf.png",
+        "reason": "ignored pattern"
+      },
+      {
+        "path": "ext/requests-logo-compressed.png",
+        "reason": "ignored pattern"
+      },
+      {
+        "path": "ext/requests-logo.ai",
+        "reason": "binary or unsupported file type"
+      },
+      {
+        "path": "ext/requests-logo.png",
+        "reason": "ignored pattern"
+      },
+      {
+        "path": "ext/requests-logo.svg",
+        "reason": "binary or unsupported file type"
+      },
+      {
+        "path": "src/requests/models.py",
+        "reason": "file too large (41462 bytes)"
+      },
+      {
+        "path": "src/requests/py.typed",
+        "reason": "binary or unsupported file type"
+      },
+      {
+        "path": "tests/__init__.py",
+        "reason": "test file"
+      },
+      {
+        "path": "tests/certs/README.md",
+        "reason": "test file"
+      },
+      {
+        "path": "tests/certs/expired/Makefile",
+        "reason": "test file"
+      },
+      {
+        "path": "tests/certs/expired/README.md",
+        "reason": "test file"
+      },
+      {
+        "path": "tests/certs/expired/ca/Makefile",
+        "reason": "test file"
+      },
+      {
+        "path": "tests/certs/expired/ca/ca-private.key",
+        "reason": "test file"
+      },
+      {
+        "path": "tests/certs/expired/ca/ca.cnf",
+        "reason": "test file"
+      },
+      {
+        "path": "tests/certs/expired/ca/ca.crt",
+        "reason": "test file"
+      },
+      {
+        "path": "tests/certs/expired/ca/ca.srl",
+        "reason": "test file"
+      },
+      {
+        "path": "tests/certs/expired/server/Makefile",
+        "reason": "test file"
+      },
+      {
+        "path": "tests/certs/expired/server/cert.cnf",
+        "reason": "test file"
+      },
+      {
+        "path": "tests/certs/expired/server/server.csr",
+        "reason": "test file"
+      },
+      {
+        "path": "tests/certs/expired/server/server.key",
+        "reason": "test file"
+      },
+      {
+        "path": "tests/certs/expired/server/server.pem",
+        "reason": "test file"
+      },
+      {
+        "path": "tests/certs/mtls/Makefile",
+        "reason": "test file"
+      },
+      {
+        "path": "tests/certs/mtls/README.md",
+        "reason": "test file"
+      },
+      {
+        "path": "tests/certs/mtls/client/Makefile",
+        "reason": "test file"
+      },
+      {
+        "path": "tests/certs/mtls/client/cert.cnf",
+        "reason": "test file"
+      },
+      {
+        "path": "tests/certs/mtls/client/client.csr",
+        "reason": "test file"
+      },
+      {
+        "path": "tests/certs/mtls/client/client.key",
+        "reason": "test file"
+      },
+      {
+        "path": "tests/certs/mtls/client/client.pem",
+        "reason": "test file"
+      },
+      {
+        "path": "tests/certs/valid/server/Makefile",
+        "reason": "test file"
+      },
+      {
+        "path": "tests/certs/valid/server/cert.cnf",
+        "reason": "test file"
+      },
+      {
+        "path": "tests/certs/valid/server/server.csr",
+        "reason": "test file"
+      },
+      {
+        "path": "tests/certs/valid/server/server.key",
+        "reason": "test file"
+      },
+      {
+        "path": "tests/certs/valid/server/server.pem",
+        "reason": "test file"
+      },
+      {
+        "path": "tests/compat.py",
+        "reason": "test file"
+      },
+      {
+        "path": "tests/conftest.py",
+        "reason": "test file"
+      },
+      {
+        "path": "tests/test_adapters.py",
+        "reason": "test file"
+      },
+      {
+        "path": "tests/test_help.py",
+        "reason": "test file"
+      },
+      {
+        "path": "tests/test_hooks.py",
+        "reason": "test file"
+      },
+      {
+        "path": "tests/test_lowlevel.py",
+        "reason": "test file"
+      },
+      {
+        "path": "tests/test_packages.py",
+        "reason": "test file"
+      },
+      {
+        "path": "tests/test_requests.py",
+        "reason": "test file"
+      },
+      {
+        "path": "tests/test_structures.py",
+        "reason": "test file"
+      },
+      {
+        "path": "tests/test_testserver.py",
+        "reason": "test file"
+      },
+      {
+        "path": "tests/test_utils.py",
+        "reason": "test file"
+      },
+      {
+        "path": "tests/testserver/__init__.py",
+        "reason": "test file"
+      },
+      {
+        "path": "tests/testserver/server.py",
+        "reason": "test file"
+      },
+      {
+        "path": "tests/utils.py",
+        "reason": "test file"
+      },
+      {
+        "path": "src/requests/structures.py",
+        "reason": "not reviewed: max_files limit of 20 reached (48 files were eligible)"
+      },
+      {
+        "path": "src/requests/utils.py",
+        "reason": "not reviewed: max_files limit of 20 reached (48 files were eligible)"
+      },
+      {
+        "path": "pyproject.toml",
+        "reason": "not reviewed: max_files limit of 20 reached (48 files were eligible)"
+      },
+      {
+        "path": "docs/requirements.txt",
+        "reason": "not reviewed: max_files limit of 20 reached (48 files were eligible)"
+      },
+      {
+        "path": ".pre-commit-config.yaml",
+        "reason": "not reviewed: max_files limit of 20 reached (48 files were eligible)"
+      },
+      {
+        "path": ".readthedocs.yaml",
+        "reason": "not reviewed: max_files limit of 20 reached (48 files were eligible)"
+      },
+      {
+        "path": ".github/AI_POLICY.md",
+        "reason": "not reviewed: max_files limit of 20 reached (48 files were eligible)"
+      },
+      {
+        "path": ".github/CODE_OF_CONDUCT.md",
+        "reason": "not reviewed: max_files limit of 20 reached (48 files were eligible)"
+      },
+      {
+        "path": ".github/CONTRIBUTING.md",
+        "reason": "not reviewed: max_files limit of 20 reached (48 files were eligible)"
+      },
+      {
+        "path": ".github/FUNDING.yml",
+        "reason": "not reviewed: max_files limit of 20 reached (48 files were eligible)"
+      },
+      {
+        "path": ".github/ISSUE_TEMPLATE.md",
+        "reason": "not reviewed: max_files limit of 20 reached (48 files were eligible)"
+      },
+      {
+        "path": ".github/SECURITY.md",
+        "reason": "not reviewed: max_files limit of 20 reached (48 files were eligible)"
+      },
+      {
+        "path": ".github/dependabot.yml",
+        "reason": "not reviewed: max_files limit of 20 reached (48 files were eligible)"
+      },
+      {
+        "path": ".github/ISSUE_TEMPLATE/Bug_report.md",
+        "reason": "not reviewed: max_files limit of 20 reached (48 files were eligible)"
+      },
+      {
+        "path": ".github/ISSUE_TEMPLATE/Custom.md",
+        "reason": "not reviewed: max_files limit of 20 reached (48 files were eligible)"
+      },
+      {
+        "path": ".github/ISSUE_TEMPLATE/Feature_request.md",
+        "reason": "not reviewed: max_files limit of 20 reached (48 files were eligible)"
+      },
+      {
+        "path": ".github/workflows/close-issues.yml",
+        "reason": "not reviewed: max_files limit of 20 reached (48 files were eligible)"
+      },
+      {
+        "path": ".github/workflows/codeql-analysis.yml",
+        "reason": "not reviewed: max_files limit of 20 reached (48 files were eligible)"
+      },
+      {
+        "path": ".github/workflows/lint.yml",
+        "reason": "not reviewed: max_files limit of 20 reached (48 files were eligible)"
+      },
+      {
+        "path": ".github/workflows/lock-issues.yml",
+        "reason": "not reviewed: max_files limit of 20 reached (48 files were eligible)"
+      },
+      {
+        "path": ".github/workflows/publish.yml",
+        "reason": "not reviewed: max_files limit of 20 reached (48 files were eligible)"
+      },
+      {
+        "path": ".github/workflows/run-tests.yml",
+        "reason": "not reviewed: max_files limit of 20 reached (48 files were eligible)"
+      },
+      {
+        "path": ".github/workflows/typecheck.yml",
+        "reason": "not reviewed: max_files limit of 20 reached (48 files were eligible)"
+      },
+      {
+        "path": ".github/workflows/zizmor.yml",
+        "reason": "not reviewed: max_files limit of 20 reached (48 files were eligible)"
+      },
+      {
+        "path": "requirements-dev.txt",
+        "reason": "not reviewed: max_files limit of 20 reached (48 files were eligible)"
+      },
+      {
+        "path": "tox.ini",
+        "reason": "not reviewed: max_files limit of 20 reached (48 files were eligible)"
+      },
+      {
+        "path": "docs/_static/custom.css",
+        "reason": "not reviewed: max_files limit of 20 reached (48 files were eligible)"
+      },
+      {
+        "path": "docs/_templates/sidebar.html",
+        "reason": "not reviewed: max_files limit of 20 reached (48 files were eligible)"
+      }
+    ],
+    "summary": {
+      "headline": "The Requests library is well-maintained but has 4 high-severity bugs requiring fixes: a misleading no-op `is_prepared` function, missing return statement in `MockResponse.getheaders()`, potential KeyError in Digest auth, and type mismatch in A1 hash construction. Multiple medium-severity issues include legacy Python 2 compatibility code (basestring, is_py2, is_py3) that should be cleaned up, exception classes not properly initializing base classes, and docstring/signature mismatches in the API.",
+      "top_findings": [
+        "{'file': 'src/requests/_types.py', 'severity': 'high', 'issue': 'is_prepared function docstring claims it verifies PreparedRequest state but unconditionally returns True at runtime'}",
+        "{'file': 'src/requests/cookies.py', 'line': 124, 'severity': 'high', 'issue': 'MockResponse.getheaders() discards return value from self._headers.getheaders() call, causing method to return None'}",
+        "{'file': 'src/requests/auth.py', 'line': 195, 'severity': 'high', 'issue': \"Potential KeyError accessing 'realm'/'nonce' from chal dict, and type mismatch in A1 construction when password is bytes\"}",
+        "{'file': 'src/requests/auth.py', 'line': 214, 'severity': 'medium', 'issue': 'SHA-1 used for cnonce generation is cryptographically weak by modern standards'}",
+        "{'file': 'src/requests/exceptions.py', 'severity': 'medium', 'issue': \"Multiple exception classes (MissingSchema, InvalidSchema, ContentDecodingError, StreamConsumedError) don't initialize their base classes properly\"}"
+      ],
+      "skipped_notes": [
+        "Coverage: 20 of 48 eligible files were reviewed. The other 28 were ranked below the max_files cut and never opened.",
+        "Generated, binary, oversized, and ignored files were excluded from review.",
+        "PR reviews focus comments on changed files while using broader repo context."
+      ]
+    },
+    "artifacts": {
+      "json_path": "",
+      "markdown_path": ""
+    }
+  },
+  "checks": [
+    {
+      "citation": "no line number",
+      "verdict": "accurate",
+      "note": "is_prepared returns True unconditionally at runtime; the source carries the comment '# noop at runtime to avoid AssertionError'. No line is cited, so nothing is misplaced -- the position was cleared as unusable before the finding was reported."
+    },
+    {
+      "citation": "code line",
+      "verdict": "misplaced",
+      "note": "chal[\"realm\"] and chal[\"nonce\"] are subscript accesses and do raise KeyError when absent, at lines 162-163. Line 195 is inside sha256_utf8."
+    },
+    {
+      "citation": "code line",
+      "verdict": "misplaced",
+      "note": "A1 = f\"{self.username}:{realm}:{self.password}\" at line 221 does render a bytes password as b'...'. Line 195 is inside sha256_utf8."
+    },
+    {
+      "citation": "code line",
+      "verdict": "misplaced",
+      "note": "A real defect: getheaders() at lines 131-132 calls self._headers.getheaders(name) without returning it, so it always yields None. Line 124 is a ':param headers:' line inside a docstring."
+    },
+    {
+      "citation": "no line number"
+    },
+    {
+      "citation": "comment line"
+    },
+    {
+      "citation": "comment line"
+    },
+    {
+      "citation": "code line"
+    },
+    {
+      "citation": "code line"
+    },
+    {
+      "citation": "no line number"
+    },
+    {
+      "citation": "code line"
+    },
+    {
+      "citation": "code line"
+    },
+    {
+      "citation": "code line"
+    },
+    {
+      "citation": "code line"
+    },
+    {
+      "citation": "code line"
+    },
+    {
+      "citation": "code line"
+    },
+    {
+      "citation": "no line number"
+    },
+    {
+      "citation": "code line"
+    },
+    {
+      "citation": "code line"
+    },
+    {
+      "citation": "code line"
+    },
+    {
+      "citation": "code line"
+    },
+    {
+      "citation": "no line number"
+    },
+    {
+      "citation": "code line"
+    },
+    {
+      "citation": "code line"
+    },
+    {
+      "citation": "code line"
+    },
+    {
+      "citation": "no line number"
+    },
+    {
+      "citation": "no line number"
+    },
+    {
+      "citation": "no line number"
+    },
+    {
+      "citation": "code line"
+    },
+    {
+      "citation": "no line number"
+    },
+    {
+      "citation": "no line number"
+    },
+    {
+      "citation": "no line number"
+    },
+    {
+      "citation": "no line number"
+    },
+    {
+      "citation": "comment line"
+    },
+    {
+      "citation": "code line"
+    },
+    {
+      "citation": "code line"
+    },
+    {
+      "citation": "code line"
+    },
+    {
+      "citation": "code line"
+    },
+    {
+      "citation": "no line number"
+    },
+    {
+      "citation": "code line"
+    },
+    {
+      "citation": "no line number"
+    },
+    {
+      "citation": "code line"
+    },
+    {
+      "citation": "no line number"
+    },
+    {
+      "citation": "code line"
+    },
+    {
+      "citation": "code line"
+    },
+    {
+      "citation": "code line"
+    },
+    {
+      "citation": "code line"
+    },
+    {
+      "citation": "code line"
+    },
+    {
+      "citation": "code line"
+    },
+    {
+      "citation": "code line"
+    },
+    {
+      "citation": "code line"
+    },
+    {
+      "citation": "comment line"
+    },
+    {
+      "citation": "comment line"
+    },
+    {
+      "citation": "code line"
+    },
+    {
+      "citation": "code line"
+    },
+    {
+      "citation": "code line"
+    },
+    {
+      "citation": "code line"
+    },
+    {
+      "citation": "no line number"
+    },
+    {
+      "citation": "code line"
+    },
+    {
+      "citation": "code line"
+    },
+    {
+      "citation": "no line number"
+    },
+    {
+      "citation": "code line"
+    },
+    {
+      "citation": "no line number"
+    },
+    {
+      "citation": "code line"
+    },
+    {
+      "citation": "code line"
+    },
+    {
+      "citation": "code line"
+    },
+    {
+      "citation": "code line"
+    },
+    {
+      "citation": "code line"
+    },
+    {
+      "citation": "no line number"
+    },
+    {
+      "citation": "code line"
+    }
+  ]
+}

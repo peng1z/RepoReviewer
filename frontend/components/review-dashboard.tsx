@@ -3,8 +3,66 @@
 import { FormEvent, useEffect, useState } from "react";
 
 import type { ProgressEvent, ReviewJob, ReviewResult, Severity } from "../lib/types";
+import { demoRuns } from "../demo";
+import type { Citation, DemoRun, FindingCheck, Verdict } from "../demo/types";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "http://127.0.0.1:8000";
+// Resolved at build time, and deliberately empty when unset rather than
+// defaulting to localhost. The hosted demo is served over https, where a
+// request to a local address is blocked as mixed content -- so a baked-in
+// default would leave the page issuing requests that can never succeed and
+// give a visitor no way to point it anywhere else. Empty means the page runs
+// on the recorded review alone; `npm run dev` and a self-hosted build supply
+// the value through NEXT_PUBLIC_API_BASE.
+const buildTimeApiBase = process.env.NEXT_PUBLIC_API_BASE ?? "";
+
+/** Reject a backend the browser will refuse to call from the current page. */
+export function mixedContentWarning(base: string): string | null {
+  if (typeof window === "undefined" || !base.startsWith("http://")) {
+    return null;
+  }
+  if (window.location.protocol !== "https:") {
+    return null;
+  }
+  let host = "";
+  try {
+    host = new URL(base).hostname;
+  } catch {
+    host = "";
+  }
+  if (host === "localhost" || host === "127.0.0.1") {
+    return null;
+  }
+  return "This page is served over https, so the browser will block a plain http backend. Use an https address.";
+}
+
+const hintStyle = {
+  color: "var(--muted)",
+  fontSize: "0.85rem",
+  lineHeight: 1.5,
+  margin: "6px 0 0",
+} as const;
+
+const VERDICT_LABELS: Record<Verdict, string> = {
+  accurate: "Checked: accurate",
+  misplaced: "Checked: right issue, wrong line",
+  "false-positive": "Checked: false positive",
+  unverified: "Checked: could not settle",
+};
+
+const CITATION_LABELS: Record<Citation, string> = {
+  "code line": "cites a line of code",
+  "comment line": "cites a comment",
+  "blank line": "cites a blank line",
+  "past end of file": "cites a line past the end of the file",
+  "no line number": "no line number",
+};
+
+const VERDICT_COLORS: Record<Verdict, { border: string; text: string }> = {
+  accurate: { border: "#2f7d4f", text: "#2f7d4f" },
+  misplaced: { border: "#b8860b", text: "#8a6508" },
+  "false-positive": { border: "#b03a3a", text: "#b03a3a" },
+  unverified: { border: "#7a7a7a", text: "#666" },
+};
 
 const severityOrder: Severity[] = ["high", "medium", "low"];
 
@@ -26,17 +84,19 @@ export function ReviewDashboard() {
   const [events, setEvents] = useState<ProgressEvent[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [apiBase, setApiBase] = useState(buildTimeApiBase);
+  const [demo, setDemo] = useState<DemoRun | null>(demoRuns[0]);
 
   useEffect(() => {
-    if (!jobId) return;
-    const source = new EventSource(`${API_BASE}/reviews/${jobId}/events`);
+    if (!jobId || !apiBase) return;
+    const source = new EventSource(`${apiBase}/reviews/${jobId}/events`);
     source.addEventListener("progress", (event) => {
       const payload = JSON.parse(event.data) as ProgressEvent;
       setEvents((current) => [...current, payload]);
     });
     source.addEventListener("status", async () => {
       source.close();
-      const response = await fetch(`${API_BASE}/reviews/${jobId}`);
+      const response = await fetch(`${apiBase}/reviews/${jobId}`);
       const payload = (await response.json()) as ReviewJob;
       setJob(payload);
     });
@@ -44,14 +104,26 @@ export function ReviewDashboard() {
       source.close();
     };
     return () => source.close();
-  }, [jobId]);
+  }, [jobId, apiBase]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!apiBase) {
+      setError(
+        "No backend configured. This is the hosted demo, which ships a recorded review and calls nothing. Reviewing a repository means cloning it and running a model against it, so point Backend URL at a RepoReviewer backend you run yourself.",
+      );
+      return;
+    }
+    const mixedContent = mixedContentWarning(apiBase);
+    if (mixedContent) {
+      setError(mixedContent);
+      return;
+    }
     setSubmitting(true);
     setEvents([]);
     setError(null);
     setJob(null);
+    setDemo(null);
 
     const payload = {
       ...form,
@@ -59,7 +131,7 @@ export function ReviewDashboard() {
     };
 
     try {
-      const response = await fetch(`${API_BASE}/reviews`, {
+      const response = await fetch(`${apiBase}/reviews`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -101,6 +173,22 @@ export function ReviewDashboard() {
           </p>
 
           <form onSubmit={handleSubmit} style={{ display: "grid", gap: 16, marginTop: 24 }}>
+            <label>
+              <div style={labelStyle}>Backend URL</div>
+              <input
+                value={apiBase}
+                onChange={(event) => setApiBase(event.target.value.trim())}
+                placeholder="https://your-reporeviewer-backend.example.com"
+                style={inputStyle}
+              />
+              <p style={hintStyle}>
+                {apiBase
+                  ? (mixedContentWarning(apiBase) ??
+                    "Reviews will run on this backend.")
+                  : "Empty: the page shows the recorded review below and makes no requests. Reviewing a repository means cloning it and running a model over it, so this demo does not host a backend -- point this at one you run."}
+              </p>
+            </label>
+
             <label>
               <div style={labelStyle}>GitHub URL</div>
               <input
@@ -210,13 +298,93 @@ export function ReviewDashboard() {
           </div>
         </section>
 
-        {job?.result ? <ResultPanel result={job.result} jobId={job.id} /> : null}
+        {demo ? <VerificationPanel run={demo} /> : null}
+
+        {job?.result ? (
+          <ResultPanel result={job.result} jobId={job.id} apiBase={apiBase} />
+        ) : null}
+        {demo ? (
+          <ResultPanel result={demo.result} jobId={demo.slug} apiBase="" checks={demo.checks} />
+        ) : null}
       </div>
     </main>
   );
 }
 
-function ResultPanel({ result, jobId }: { result: ReviewResult; jobId: string }) {
+function VerificationPanel({ run }: { run: DemoRun }) {
+  const citations = new Map<Citation, number>();
+  const verdicts = new Map<Verdict, number>();
+  for (const check of run.checks) {
+    citations.set(check.citation, (citations.get(check.citation) ?? 0) + 1);
+    if (check.verdict) {
+      verdicts.set(check.verdict, (verdicts.get(check.verdict) ?? 0) + 1);
+    }
+  }
+  const checkedCount = run.checks.filter((check) => check.verdict).length;
+
+  return (
+    <section style={{ ...sectionStyle, marginTop: 24 }}>
+      <h2 style={{ margin: 0 }}>Recorded review, checked against the code</h2>
+      <p style={{ color: "var(--muted)", lineHeight: 1.6, marginTop: 12 }}>
+        A real run against{" "}
+        <a href={`https://github.com/${run.label}/tree/${run.commit}`}>{run.label}</a> at{" "}
+        <code>{run.commit.slice(0, 7)}</code>, finishing in {run.elapsedSeconds}s. Nothing in the
+        output was edited. Publishing a model&apos;s claims about someone else&apos;s project
+        without checking them would mean asserting defects that may not exist, so both halves of
+        the check ship with it.
+      </p>
+
+      <h3 style={{ marginBottom: 4 }}>Where the line numbers point</h3>
+      <p style={{ color: "var(--muted)", margin: "0 0 12px", lineHeight: 1.6 }}>
+        Mechanical, so it covers all {run.checks.length} findings and anyone can redo it from the
+        commit above.
+      </p>
+      <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+        {[...citations.entries()]
+          .sort((a, b) => b[1] - a[1])
+          .map(([citation, count]) => (
+            <span key={citation} style={pillStyle(citation === "code line" ? "#2f7d4f" : "#8a6508")}>
+              {CITATION_LABELS[citation]} <strong>{count}</strong>
+            </span>
+          ))}
+      </div>
+
+      <h3 style={{ margin: "22px 0 4px" }}>Whether the problem is really there</h3>
+      <p style={{ color: "var(--muted)", margin: "0 0 12px", lineHeight: 1.6 }}>
+        This needs judgement, so it was done by hand and only for the {checkedCount}{" "}
+        high-severity findings. The other {run.checks.length - checkedCount} carry the positional
+        check alone and are not claimed to be right or wrong.
+      </p>
+      <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+        {[...verdicts.entries()].map(([verdict, count]) => (
+          <span key={verdict} style={pillStyle(VERDICT_COLORS[verdict].border)}>
+            {VERDICT_LABELS[verdict]} <strong>{count}</strong>
+          </span>
+        ))}
+      </div>
+
+      <p style={{ color: "var(--muted)", lineHeight: 1.6, marginTop: 18 }}>
+        The bottleneck is placing an issue, not finding one. A citation that sends a reviewer to
+        unrelated code costs more trust than the observation earns. Positions that cannot hold a
+        finding -- past the end of a file, or blank -- are now cleared automatically and the
+        finding reported without one; that is a floor, not a fix, because a line can be wrong
+        while still containing code.
+      </p>
+    </section>
+  );
+}
+
+function ResultPanel({
+  result,
+  jobId,
+  apiBase,
+  checks,
+}: {
+  result: ReviewResult;
+  jobId: string;
+  apiBase: string;
+  checks?: FindingCheck[];
+}) {
   return (
     <section style={{ ...sectionStyle, marginTop: 24 }}>
       <div style={sectionHeaderStyle}>
@@ -226,14 +394,19 @@ function ResultPanel({ result, jobId }: { result: ReviewResult; jobId: string })
             {result.repo_name} · {result.provider}/{result.model}
           </p>
         </div>
-        <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-          <a href={`${API_BASE}/reviews/${jobId}/artifacts/review.json`} style={buttonStyle}>
-            Download JSON
-          </a>
-          <a href={`${API_BASE}/reviews/${jobId}/artifacts/review.md`} style={buttonStyle}>
-            Download Markdown
-          </a>
-        </div>
+        {/* The artifacts live on the backend that produced them. With no
+            backend configured -- the hosted demo -- these would be dead links,
+            so they are omitted rather than shown broken. */}
+        {apiBase ? (
+          <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+            <a href={`${apiBase}/reviews/${jobId}/artifacts/review.json`} style={buttonStyle}>
+              Download JSON
+            </a>
+            <a href={`${apiBase}/reviews/${jobId}/artifacts/review.md`} style={buttonStyle}>
+              Download Markdown
+            </a>
+          </div>
+        ) : null}
       </div>
 
       <div style={summaryBoxStyle}>
@@ -243,16 +416,30 @@ function ResultPanel({ result, jobId }: { result: ReviewResult; jobId: string })
             <li key={finding}>{finding}</li>
           ))}
         </ul>
+        {/* summary.skipped_notes was produced by the backend and never shown,
+            so the coverage line -- how much of the repository was actually
+            read -- did not reach the reader. */}
+        {result.summary.skipped_notes.length > 0 ? (
+          <ul style={{ margin: "14px 0 0", paddingLeft: 20, color: "var(--muted)" }}>
+            {result.summary.skipped_notes.map((note) => (
+              <li key={note}>{note}</li>
+            ))}
+          </ul>
+        ) : null}
       </div>
 
       {severityOrder.map((severity) => {
-        const items = result.comments.filter((comment) => comment.severity === severity);
+        // Verdicts are indexed against result.comments, so the original index
+        // has to survive the per-severity split.
+        const items = result.comments
+          .map((comment, index) => ({ comment, check: checks?.[index] }))
+          .filter((entry) => entry.comment.severity === severity);
         return (
           <div key={severity} style={{ marginTop: 24 }}>
             <h3 style={{ textTransform: "capitalize" }}>{severity}</h3>
             <div style={{ display: "grid", gap: 14 }}>
               {items.length === 0 ? <p style={{ color: "var(--muted)" }}>No {severity} findings.</p> : null}
-              {items.map((comment) => (
+              {items.map(({ comment, check }) => (
                 <article key={`${comment.file}-${comment.line}-${comment.issue}`} style={findingCardStyle(severity)}>
                   <div style={{ display: "flex", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
                     <strong>
@@ -261,6 +448,33 @@ function ResultPanel({ result, jobId }: { result: ReviewResult; jobId: string })
                     </strong>
                     <span style={{ textTransform: "uppercase", letterSpacing: "0.1em" }}>{comment.severity}</span>
                   </div>
+                  {check ? (
+                    <div
+                      style={{
+                        border: `1px solid ${
+                          check.verdict ? VERDICT_COLORS[check.verdict].border : "#c9c4bb"
+                        }`,
+                        borderRadius: 12,
+                        padding: "10px 12px",
+                        margin: "10px 0 12px",
+                      }}
+                    >
+                      <strong
+                        style={{
+                          color: check.verdict ? VERDICT_COLORS[check.verdict].text : "#666",
+                        }}
+                      >
+                        {check.verdict
+                          ? VERDICT_LABELS[check.verdict]
+                          : `Not checked by hand · ${CITATION_LABELS[check.citation]}`}
+                      </strong>
+                      {check.note ? (
+                        <p style={{ margin: "6px 0 0", color: "var(--muted)", lineHeight: 1.5 }}>
+                          {check.note}
+                        </p>
+                      ) : null}
+                    </div>
+                  ) : null}
                   <p style={{ marginBottom: 8 }}>{comment.issue}</p>
                   <p style={{ marginTop: 0, color: "var(--muted)" }}>{comment.suggestion}</p>
                   {comment.snippet ? (
@@ -282,19 +496,55 @@ function ResultPanel({ result, jobId }: { result: ReviewResult; jobId: string })
         );
       })}
 
-      <div style={{ marginTop: 24 }}>
-        <h3>Skipped Files</h3>
-        <div style={{ display: "grid", gap: 8 }}>
-          {result.skipped_files.map((item) => (
-            <article key={`${item.path}-${item.reason}`} style={progressCardStyle}>
-              <strong>{item.path}</strong>
-              <p style={{ margin: "8px 0 0", color: "var(--muted)" }}>{item.reason}</p>
-            </article>
-          ))}
-        </div>
-      </div>
+      <SkippedFiles files={result.skipped_files} />
     </section>
   );
+}
+
+function SkippedFiles({ files }: { files: { path: string; reason: string }[] }) {
+  if (files.length === 0) {
+    return null;
+  }
+  // One card per file put 150+ of them on the page and buried the only part
+  // that matters: how many were left out, and why. Group by reason instead,
+  // and keep the paths behind a disclosure.
+  const byReason = new Map<string, string[]>();
+  for (const item of files) {
+    const paths = byReason.get(item.reason) ?? [];
+    paths.push(item.path);
+    byReason.set(item.reason, paths);
+  }
+  const groups = [...byReason.entries()].sort((a, b) => b[1].length - a[1].length);
+
+  return (
+    <div style={{ marginTop: 24 }}>
+      <h3>Not reviewed ({files.length} files)</h3>
+      <div style={{ display: "grid", gap: 8 }}>
+        {groups.map(([reason, paths]) => (
+          <details key={reason} style={progressCardStyle}>
+            <summary style={{ cursor: "pointer" }}>
+              <strong>{paths.length}</strong> · {reason}
+            </summary>
+            <ul style={{ margin: "10px 0 0", paddingLeft: 20, color: "var(--muted)" }}>
+              {paths.map((path) => (
+                <li key={path}>{path}</li>
+              ))}
+            </ul>
+          </details>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function pillStyle(color: string) {
+  return {
+    border: `1px solid ${color}`,
+    color,
+    borderRadius: 999,
+    padding: "6px 14px",
+    fontSize: "0.9rem",
+  } as const;
 }
 
 const sectionStyle = {
