@@ -227,30 +227,44 @@ def normalize_comments(comments: list[ReviewComment]) -> list[ReviewComment]:
     return sorted(deduped, key=lambda item: (severity_rank[item.severity], item.file, item.line or 0))
 
 
-def drop_unreachable_lines(
+def clear_uncitable_lines(
     comments: list[ReviewComment],
-    line_counts: dict[str, int],
+    file_lines: dict[str, list[str]],
 ) -> list[str]:
-    """Clear line numbers that point past the end of the file they name.
+    """Clear line numbers that cannot be what the finding describes.
 
-    Models invent positions. In a review of psf/requests, three findings on a
-    51-line file cited lines 62, 66 and 69 -- not off by a few, but outside the
-    file entirely. The observations themselves were not all worthless (one was
-    a real note about `assert` being stripped under `python -O`), so the
-    finding is kept and only the position is dropped: a citation to a line that
-    does not exist is worse than no citation, because a reader who follows it
-    finds something unrelated or nothing at all.
+    Two cases, both decidable without reading the finding:
+
+    - The line is past the end of the file. A review of psf/requests put three
+      findings on lines 62, 66 and 69 of a 51-line file.
+    - The line is blank. Across the 77 findings of a later review of the same
+      repository, 21 cited a line containing nothing at all -- more than a
+      quarter of the run, and the largest single category after real code.
+
+    A line holding only a comment is deliberately left alone: a finding about a
+    stale TODO or a `# noqa` is legitimately filed against a comment, and one
+    such finding in that review was checked and correct.
+
+    The finding survives; only the position goes. A citation to a line that
+    cannot hold it is worse than none, because a reader who follows it lands on
+    something unrelated.
 
     Returns a note per cleared finding, for the caller to surface.
     """
     notes: list[str] = []
     for comment in comments:
-        limit = line_counts.get(comment.file)
-        if comment.line is None or limit is None:
+        lines = file_lines.get(comment.file)
+        if comment.line is None or lines is None:
             continue
-        if comment.line < 1 or comment.line > limit:
+        if comment.line < 1 or comment.line > len(lines):
             notes.append(
-                f"{comment.file}:{comment.line} is outside the file ({limit} lines); "
+                f"{comment.file}:{comment.line} is outside the file ({len(lines)} lines); "
+                "the finding is kept without a line number"
+            )
+            comment.line = None
+        elif not lines[comment.line - 1].strip():
+            notes.append(
+                f"{comment.file}:{comment.line} is a blank line; "
                 "the finding is kept without a line number"
             )
             comment.line = None

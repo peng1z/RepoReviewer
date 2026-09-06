@@ -7,7 +7,7 @@ import pytest
 from repo_reviewer import provider
 from repo_reviewer import provider as provider_module
 from repo_reviewer.models import ReviewComment
-from repo_reviewer.provider import drop_unreachable_lines, resolve_model
+from repo_reviewer.provider import clear_uncitable_lines, resolve_model
 
 
 @pytest.fixture(autouse=True)
@@ -335,51 +335,90 @@ def test_resolve_model_falls_back_to_the_provider_alias() -> None:
     assert resolve_model("unknown-provider", None) == "openai/gpt-4.1-mini"
 
 
+def _lines(count: int) -> list[str]:
+    """A file of `count` lines, none of them blank."""
+    return [f"code_{index}()" for index in range(count)]
+
+
 def _comment(file: str, line: int | None) -> ReviewComment:
     return ReviewComment(file=file, line=line, severity="low", issue="i", suggestion="s")
 
 
-def test_drop_unreachable_lines_clears_positions_past_the_end_of_the_file() -> None:
+def test_clear_uncitable_lines_clears_positions_past_the_end_of_the_file() -> None:
     # A review of psf/requests put three findings on lines 62, 66 and 69 of a
     # 51-line file. extract_snippet returned "" for all three, which was the
     # signal, and it was discarded.
     comments = [_comment("a.py", 62), _comment("a.py", 20), _comment("a.py", 51)]
 
-    notes = drop_unreachable_lines(comments, {"a.py": 51})
+    notes = clear_uncitable_lines(comments, {"a.py": _lines(51)})
 
     assert [item.line for item in comments] == [None, 20, 51]
     assert len(notes) == 1
     assert "a.py:62 is outside the file (51 lines)" in notes[0]
 
 
-def test_drop_unreachable_lines_keeps_the_finding_itself() -> None:
+def test_clear_uncitable_lines_keeps_the_finding_itself() -> None:
     # One of the three real cases was a valid point about `assert` being
     # stripped under `python -O`. The observation survives; only the position
     # it cited is dropped.
     comment = _comment("a.py", 999)
     comment.issue = "assert can be disabled with -O"
 
-    drop_unreachable_lines([comment], {"a.py": 10})
+    clear_uncitable_lines([comment], {"a.py": _lines(10)})
 
     assert comment.issue == "assert can be disabled with -O"
     assert comment.line is None
 
 
-def test_drop_unreachable_lines_rejects_a_line_below_one() -> None:
+def test_clear_uncitable_lines_rejects_a_line_below_one() -> None:
     comments = [_comment("a.py", 0), _comment("a.py", -3)]
 
-    notes = drop_unreachable_lines(comments, {"a.py": 10})
+    notes = clear_uncitable_lines(comments, {"a.py": _lines(10)})
 
     assert [item.line for item in comments] == [None, None]
     assert len(notes) == 2
 
 
-def test_drop_unreachable_lines_leaves_unknown_files_and_absent_lines_alone() -> None:
+def test_clear_uncitable_lines_leaves_unknown_files_and_absent_lines_alone() -> None:
     unknown = _comment("other.py", 4000)
     absent = _comment("a.py", None)
 
-    notes = drop_unreachable_lines([unknown, absent], {"a.py": 10})
+    notes = clear_uncitable_lines([unknown, absent], {"a.py": _lines(10)})
 
     assert unknown.line == 4000
     assert absent.line is None
     assert notes == []
+
+
+def test_clear_uncitable_lines_clears_a_blank_line() -> None:
+    # 21 of 77 findings in a review of psf/requests cited a line containing
+    # nothing at all -- the largest category after real code.
+    lines = ["import os", "", "def f():", "    return 1"]
+    comments = [_comment("a.py", 2), _comment("a.py", 3)]
+
+    notes = clear_uncitable_lines(comments, {"a.py": lines})
+
+    assert [item.line for item in comments] == [None, 3]
+    assert len(notes) == 1
+    assert "a.py:2 is a blank line" in notes[0]
+
+
+def test_clear_uncitable_lines_keeps_a_citation_to_a_comment() -> None:
+    # A finding about a stale TODO or a `# noqa` is legitimately filed against
+    # a comment line, and one such finding was checked and correct.
+    lines = ["import sys", "# TODO: drop the Python 2 branch", "x = 1"]
+    comment = _comment("a.py", 2)
+
+    notes = clear_uncitable_lines([comment], {"a.py": lines})
+
+    assert comment.line == 2
+    assert notes == []
+
+
+def test_clear_uncitable_lines_treats_whitespace_only_as_blank() -> None:
+    comment = _comment("a.py", 2)
+
+    notes = clear_uncitable_lines([comment], {"a.py": ["x = 1", "   \t  ", "y = 2"]})
+
+    assert comment.line is None
+    assert len(notes) == 1
