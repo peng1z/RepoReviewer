@@ -31,10 +31,38 @@ ProgressCallback = Callable[[ProgressEvent], Awaitable[None]]
 
 def _coerce_string_list(value, *, fallback: list[str] | None = None) -> list[str]:
     if isinstance(value, list):
-        return [str(item) for item in value]
+        return [_finding_to_line(item) for item in value]
     if isinstance(value, str):
         return [value]
     return fallback or []
+
+
+def _finding_to_line(item) -> str:
+    """Render one summary entry as a sentence.
+
+    Asked for `top_findings`, models often answer with the finding objects
+    rather than prose. `str()` on a dict gives Python's repr, so a review of
+    psf/requests opened its summary with
+
+        {'file': 'src/requests/cookies.py', 'line': 124, 'severity': 'high',
+         'issue': "MockResponse.getheaders() discards return value ..."}
+
+    -- quoting style and all, at the top of the report. The same shape the
+    JSON-failure fallback already produces is used instead.
+    """
+    if not isinstance(item, dict):
+        return str(item)
+    issue = str(item.get("issue") or item.get("summary") or "").strip()
+    if not issue:
+        return str(item)
+    severity = str(item.get("severity") or "").strip()
+    location = str(item.get("file") or "").strip()
+    line = item.get("line")
+    if location and line:
+        location = f"{location}:{line}"
+    prefix = f"{severity.title()}: " if severity else ""
+    suffix = f" ({location})" if location else ""
+    return f"{prefix}{issue}{suffix}"
 
 
 def _coerce_string(value, *, fallback: str) -> str:
