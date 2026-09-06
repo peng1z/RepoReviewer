@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="RepoReviewer">
+  <!--
+    A prompt. This project is an instrument and its chrome is a terminal
+    title bar reading "$ repo-reviewer", so the mark is what that bar
+    already opens with, reduced until it still survives at 16px: a caret
+    and a cursor, two shapes, no lettering.
+
+    Nothing here is shared with the sibling project's mark. Not the ground,
+    not the palette, not the geometry. The two pages had already drifted
+    into looking like one template once.
+
+    Note for anyone editing this file: a double hyphen is illegal inside an
+    XML comment, and an SVG that fails to parse renders as a broken image
+    with no error anywhere. This house style writes em dashes as double
+    hyphens, which is exactly how the first version of this file shipped
+    invisible.
+  -->
+  <rect width="32" height="32" fill="#16191d"/>
+  <path d="M8.5 10 14.5 16 8.5 22" fill="none" stroke="#7fb2e5"
+        stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="17.5" y="19.2" width="8" height="2.8" rx="1.4" fill="#f4f6f8"/>
+</svg>
