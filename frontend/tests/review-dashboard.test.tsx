@@ -240,3 +240,16 @@ describe("citation", () => {
     expect(review.compareDocumentPosition(paper) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 });
+
+describe("case artifacts", () => {
+  it("links each finding into the source at the reviewed commit", () => {
+    // Checked on the case page rather than the dashboard: the dashboard shows
+    // the review, the case page is the citable document.
+    const commit = run.commit;
+    expect(commit).toMatch(/^[0-9a-f]{7,40}$/);
+    // A link built from the default branch would drift as the branch moves.
+    expect(`https://github.com/${run.label}/blob/${commit}/src/requests/cookies.py#L110`).toContain(
+      commit,
+    );
+  });
+});

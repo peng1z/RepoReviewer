@@ -70,9 +70,42 @@ export default async function CasePage({ params }: { params: Promise<{ slug: str
     item.reason.startsWith("not reviewed: max_files"),
   );
   const reviewed = new Set(result.comments.map((comment) => comment.file));
+  const repoUrl = `https://github.com/${run.label}`;
+
+  // Links into the exact commit that was reviewed, not the default branch:
+  // the branch moves, and a citation that drifts is worse than none.
+  const sourceLink = (file: string, line: number | null) =>
+    `${repoUrl}/blob/${run.commit}/${file}${line ? `#L${line}` : ""}`;
+
+  // Describes what the page shows: one recorded review of a named repository
+  // at a named commit, and the article whose method produced it. Not a
+  // ScholarlyArticle -- this is a run of a tool, not a paper.
+  const structuredData = {
+    "@context": "https://schema.org",
+    "@type": "Dataset",
+    name: `Recorded RepoReviewer review of ${run.label} at ${run.commit.slice(0, 7)}`,
+    description: `${result.comments.length} findings, each with a positional check, and ${byHand} high-severity findings read against the source by hand.`,
+    url: `${SITE}/cases/${run.slug}/`,
+    license: "https://opensource.org/licenses/MIT",
+    creator: { "@type": "Person", name: "Peng Zhang", url: "https://github.com/peng1z" },
+    isBasedOn: "https://github.com/peng1z/RepoReviewer",
+    about: { "@type": "SoftwareSourceCode", name: run.label, codeRepository: repoUrl },
+    citation: {
+      "@type": "ScholarlyArticle",
+      name: "RepoReviewer: A Local-First Multi-Agent Architecture for Repository-Level Code Review",
+      author: { "@type": "Person", name: "Peng Zhang" },
+      identifier: "arXiv:2603.16107",
+      url: "https://arxiv.org/abs/2603.16107",
+    },
+  };
 
   return (
     <main style={{ maxWidth: 900, margin: "0 auto", padding: "40px 20px 80px" }}>
+      <script
+        type="application/ld+json"
+        // A literal built from the fixture in this file, not user input.
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }}
+      />
       <nav aria-label="Primary" style={{ display: "flex", gap: 18, flexWrap: "wrap" }}>
         <a href="/">All cases</a>
         <a href="https://arxiv.org/abs/2603.16107">Paper</a>
@@ -132,6 +165,29 @@ export default async function CasePage({ params }: { params: Promise<{ slug: str
       </section>
 
       <section style={{ marginTop: 32 }}>
+        <h2>Download</h2>
+        <p style={{ color: "var(--muted)", lineHeight: 1.7 }}>
+          The raw pipeline output, exactly as the run produced it, and the checks applied to it
+          afterwards. They are separate files on purpose: the recording is evidence, and folding a
+          later annotation into it would make the evidence a claim about itself.
+        </p>
+        <ul style={{ lineHeight: 1.8 }}>
+          <li>
+            <a href={`/cases/${run.slug}/review.json`} download>
+              review.json
+            </a>{" "}
+            — unedited output
+          </li>
+          <li>
+            <a href={`/cases/${run.slug}/checks.json`} download>
+              checks.json
+            </a>{" "}
+            — positional check for every finding, hand check for the high-severity ones
+          </li>
+        </ul>
+      </section>
+
+      <section style={{ marginTop: 32 }}>
         <h2>Findings</h2>
         {result.comments.map((comment, index) => {
           const check = run.checks[index];
@@ -146,8 +202,10 @@ export default async function CasePage({ params }: { params: Promise<{ slug: str
               }}
             >
               <h3 style={{ margin: 0, fontSize: "1rem" }}>
-                {comment.file}
-                {comment.line ? `:${comment.line}` : ""}
+                <a href={sourceLink(comment.file, comment.line)}>
+                  {comment.file}
+                  {comment.line ? `:${comment.line}` : ""}
+                </a>
               </h3>
               <dl
                 style={{

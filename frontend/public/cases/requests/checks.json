@@ -1,0 +1,217 @@
+{
+  "note": "Checks applied to review.json after the run. The positional check is mechanical and covers every finding; the substantive check was done by hand and only for the high-severity findings. Indexed by position in review.json's `comments`.",
+  "reviewed_commit": "dae7ef63b4df6eded86637f251fc4e3a06c3b479",
+  "checks": [
+    {
+      "citation": "comment line",
+      "verdict": "false-positive",
+      "note": "Line 18 is a comment. Importing the installed requests to read its version is the ordinary Sphinx conf.py pattern, not a defect."
+    },
+    {
+      "citation": "code line",
+      "verdict": "accurate",
+      "note": "Line 66 is exactly `assert urllib3_version_list != [\"dev\"]`, and python -O does strip it. Both the observation and the position are right."
+    },
+    {
+      "citation": "code line",
+      "verdict": "misplaced",
+      "note": "The chardet and charset_normalizer asserts are at lines 85 and 90. Line 93 is part of an error message string."
+    },
+    {
+      "citation": "code line",
+      "verdict": "false-positive",
+      "note": "0x023402 is read as its hex digits -- 02.34.02 -- which is 2.34.2, the convention requests has always used for __build__. The finding decodes it byte-wise to 2.52.2, which is arithmetically correct and the wrong convention. Line 12 is __license__."
+    },
+    {
+      "citation": "code line",
+      "verdict": "false-positive",
+      "note": "_types.py line 10 is 'from __future__ import annotations', so the annotation is never evaluated at runtime. Verified by importing the module and calling has_read(). Line 33 is a docstring."
+    },
+    {
+      "citation": "code line",
+      "verdict": "misplaced",
+      "note": "The password does go into A1 = f\"{self.username}:{realm}:{self.password}\" at line 221. Line 203 is inside sha512_utf8."
+    },
+    {
+      "citation": "code line",
+      "verdict": "misplaced",
+      "note": "A real defect: getheaders() at lines 131-132 calls self._headers.getheaders(name) without returning it, so it always yields None. Line 110 is `def host`."
+    },
+    {
+      "citation": "code line",
+      "verdict": "false-positive",
+      "note": "`chardet is None` is not inverted. compat._resolve_char_detection tries chardet first and falls back to charset_normalizer, so charset_normalizer is in use precisely when chardet is absent. The suggested `charset_normalizer is not None` would report it in use even when chardet takes precedence. Line 113, not 115."
+    },
+    {
+      "citation": "code line"
+    },
+    {
+      "citation": "comment line"
+    },
+    {
+      "citation": "code line"
+    },
+    {
+      "citation": "code line"
+    },
+    {
+      "citation": "code line"
+    },
+    {
+      "citation": "code line"
+    },
+    {
+      "citation": "code line"
+    },
+    {
+      "citation": "code line"
+    },
+    {
+      "citation": "code line"
+    },
+    {
+      "citation": "code line"
+    },
+    {
+      "citation": "code line"
+    },
+    {
+      "citation": "code line"
+    },
+    {
+      "citation": "no line number"
+    },
+    {
+      "citation": "code line"
+    },
+    {
+      "citation": "code line"
+    },
+    {
+      "citation": "code line"
+    },
+    {
+      "citation": "code line"
+    },
+    {
+      "citation": "no line number"
+    },
+    {
+      "citation": "no line number"
+    },
+    {
+      "citation": "no line number"
+    },
+    {
+      "citation": "comment line"
+    },
+    {
+      "citation": "code line"
+    },
+    {
+      "citation": "code line"
+    },
+    {
+      "citation": "no line number"
+    },
+    {
+      "citation": "no line number"
+    },
+    {
+      "citation": "code line"
+    },
+    {
+      "citation": "no line number"
+    },
+    {
+      "citation": "no line number"
+    },
+    {
+      "citation": "no line number"
+    },
+    {
+      "citation": "no line number"
+    },
+    {
+      "citation": "code line"
+    },
+    {
+      "citation": "code line"
+    },
+    {
+      "citation": "code line"
+    },
+    {
+      "citation": "code line"
+    },
+    {
+      "citation": "code line"
+    },
+    {
+      "citation": "code line"
+    },
+    {
+      "citation": "code line"
+    },
+    {
+      "citation": "code line"
+    },
+    {
+      "citation": "code line"
+    },
+    {
+      "citation": "no line number"
+    },
+    {
+      "citation": "no line number"
+    },
+    {
+      "citation": "code line"
+    },
+    {
+      "citation": "code line"
+    },
+    {
+      "citation": "code line"
+    },
+    {
+      "citation": "code line"
+    },
+    {
+      "citation": "code line"
+    },
+    {
+      "citation": "code line"
+    },
+    {
+      "citation": "no line number"
+    },
+    {
+      "citation": "no line number"
+    },
+    {
+      "citation": "no line number"
+    },
+    {
+      "citation": "comment line"
+    },
+    {
+      "citation": "code line"
+    },
+    {
+      "citation": "code line"
+    },
+    {
+      "citation": "code line"
+    },
+    {
+      "citation": "code line"
+    },
+    {
+      "citation": "code line"
+    },
+    {
+      "citation": "code line"
+    }
+  ]
+}
