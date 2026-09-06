@@ -150,10 +150,24 @@ async def review_agent(state: ReviewState, progress: ProgressCallback | None = N
     assert state.project_context
     repo_root = Path(state.workspace_dir)
     comments: list[ReviewComment] = []
+    partial_files: list[tuple[str, int, int]] = []
     total = max(1, len(state.files_to_review))
     for index, file_name in enumerate(state.files_to_review, start=1):
         path = repo_root / file_name
-        content = path.read_text(encoding="utf-8", errors="ignore")[:12_000]
+        full_text = path.read_text(encoding="utf-8", errors="ignore")
+        content, truncated_from = _bounded_content(full_text, state.request.max_file_bytes)
+        if truncated_from:
+            # Say so in the prompt. Without this the model sees a file that
+            # stops mid-statement and reports the cut as a defect in the code:
+            # in a review of psf/requests, four of eleven high-severity
+            # findings were the reviewer describing this pipeline's own
+            # truncation as "incomplete method", "truncated", "syntax error".
+            content += (
+                f"\n\n[TRUNCATED: showing the first {len(content)} characters of "
+                f"{truncated_from}. The file continues past this point; do not "
+                f"report the cut-off as a defect.]"
+            )
+            partial_files.append((file_name, len(content), truncated_from))
         response = await structured_completion(
             provider=state.request.provider,
             model=state.request.model,
@@ -188,11 +202,22 @@ async def review_agent(state: ReviewState, progress: ProgressCallback | None = N
             note += f" ({len(dropped)} malformed finding(s) skipped: {dropped[0]})"
         if unreachable:
             note += f" ({len(unreachable)} line number(s) outside the file cleared)"
+        if truncated_from:
+            note += f" (partial: {len(content)} of {truncated_from} characters)"
         await emit(
             progress,
             ProgressEvent(stage="review", message=note, percent=min(percent, 75)),
         )
     state.comments = comments
+    state.skipped_files.extend(
+        SkippedFile(
+            path=name,
+            reason=(
+                f"partially reviewed: {shown} of {total_chars} characters were sent to the model"
+            ),
+        )
+        for name, shown, total_chars in partial_files
+    )
     return state
 
 
@@ -236,11 +261,36 @@ async def summary_agent(state: ReviewState, progress: ProgressCallback | None = 
     return state
 
 
+def _bounded_content(text: str, max_file_bytes: int) -> tuple[str, int | None]:
+    """Cut a file to the size the request already asked for, and say if it cut.
+
+    The review used to truncate at a hard-coded 12,000 characters while the
+    collector accepted anything up to `max_file_bytes` (40,000 by default).
+    Every file between the two was reviewed on part of its content, with
+    nothing said to the model or to the reader -- psf/requests' adapters.py is
+    748 lines and roughly the first 300 were ever seen.
+
+    Deriving the bound from the same setting that governs collection means a
+    file the collector accepted is now reviewed whole. The cut path is kept for
+    a caller that bypasses collection, and reports what it did.
+    """
+    if len(text) <= max_file_bytes:
+        return text, None
+    return text[:max_file_bytes], len(text)
+
+
 def _skipped_notes(state: ReviewState) -> list[str]:
     notes = [
         "Generated, binary, oversized, and ignored files were excluded from review.",
         "PR reviews focus comments on changed files while using broader repo context.",
     ]
+    partial = sum(1 for item in state.skipped_files if item.reason.startswith("partially reviewed"))
+    if partial:
+        notes.insert(
+            0,
+            f"{partial} file(s) were larger than max_file_bytes and were reviewed on a prefix "
+            "of their content, not in full.",
+        )
     over_cap = sum(
         1 for item in state.skipped_files if item.reason.startswith("not reviewed: max_files")
     )

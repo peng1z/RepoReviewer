@@ -6,6 +6,7 @@ import pytest
 
 from repo_reviewer.models import ProgressEvent, ProjectContext, ReviewComment, ReviewRequest, ReviewState
 from repo_reviewer.workflow import (
+    _bounded_content,
     _coerce_string,
     _coerce_string_list,
     cloner_agent,
@@ -401,3 +402,50 @@ async def test_summary_omits_the_coverage_note_when_nothing_was_cut(local_clone,
     state = await summary_agent(state)
 
     assert not any(note.startswith("Coverage:") for note in state.summary.skipped_notes)
+
+
+def test_bounded_content_uses_the_setting_that_governs_collection() -> None:
+    # The review truncated at a hard-coded 12,000 characters while the
+    # collector accepted up to max_file_bytes, so every file between the two
+    # was reviewed on a prefix with nothing said about it.
+    text = "x" * 20_000
+
+    whole, truncated = _bounded_content(text, 40_000)
+    assert whole == text
+    assert truncated is None
+
+    cut, truncated = _bounded_content(text, 5_000)
+    assert len(cut) == 5_000
+    assert truncated == 20_000
+
+
+@pytest.mark.asyncio
+async def test_review_tells_the_model_when_it_only_sent_part_of_a_file(sample_repo, fake_llm) -> None:
+    # Four of eleven high-severity findings in a review of psf/requests were
+    # the model describing this pipeline's own truncation as broken code:
+    # "incomplete method", "truncated", "syntax error".
+    big = sample_repo / "pkg" / "big.py"
+    big.write_text("# pad\n" * 4000, encoding="utf-8")
+    fake_llm.on_review([])
+    state = _prepared(sample_repo, ["pkg/big.py"])
+    state.request.max_file_bytes = 500
+
+    state = await review_agent(state)
+
+    sent = fake_llm.calls[0]["user"]
+    assert "[TRUNCATED:" in sent
+    assert "do not report the cut-off as a defect" in sent
+    partial = [item for item in state.skipped_files if item.reason.startswith("partially reviewed")]
+    assert len(partial) == 1
+    assert partial[0].path == "pkg/big.py"
+
+
+@pytest.mark.asyncio
+async def test_review_says_nothing_about_truncation_when_it_sent_the_whole_file(
+    sample_repo, fake_llm
+) -> None:
+    fake_llm.on_review([])
+    state = await review_agent(_prepared(sample_repo, ["pkg/core.py"]))
+
+    assert "[TRUNCATED:" not in fake_llm.calls[0]["user"]
+    assert not any(item.reason.startswith("partially reviewed") for item in state.skipped_files)
