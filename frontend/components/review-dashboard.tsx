@@ -210,8 +210,9 @@ export function ReviewDashboard() {
             {apiBase
               ? "A backend is configured, so Run a review below will start a real one."
               : "This deployment hosts no backend and starts nothing: reviewing a repository means cloning whatever URL is typed and spending an API key. The review below was recorded and shipped with the page."}{" "}
-            <a href="#recorded-review">Skip to it</a>, or open the panel below to run your own
-            against a backend you host.
+            <a href="#recorded-review">Skip to it</a>, or read it on its own page at{" "}
+            <a href={`/cases/${demoRuns[0].slug}/`}>/cases/{demoRuns[0].slug}/</a>. To run your
+            own, open the panel below and point it at a backend you host.
           </p>
 
           <details style={{ marginTop: 20 }}>

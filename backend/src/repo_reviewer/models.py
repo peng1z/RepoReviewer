@@ -46,6 +46,30 @@ class ReviewArtifacts(BaseModel):
     markdown_path: str
 
 
+class ToolProvenance(BaseModel):
+    """What produced this report, and what it is not.
+
+    Added so an exported report can be traced back to the build that wrote it.
+    A report that names only a model leaves a reader unable to tell which
+    version of the pipeline ran, and the pipeline has changed in ways that
+    change its output.
+
+    Never carries credentials. The provider and model names are configuration;
+    the key is not, and does not belong in a file a user will share.
+    """
+
+    name: str = "RepoReviewer"
+    version: str
+    commit: str | None = None
+    repository: str = "https://github.com/peng1z/RepoReviewer"
+    method_paper: str = "https://arxiv.org/abs/2603.16107"
+    method_paper_note: str = (
+        "Describes version 1 of the method. This report was produced by the "
+        "build identified above, which may differ; the report is not an "
+        "experiment the paper reports."
+    )
+
+
 class ReviewResult(BaseModel):
     repo_url: HttpUrl
     repo_name: str
@@ -58,6 +82,8 @@ class ReviewResult(BaseModel):
     skipped_files: list[SkippedFile] = Field(default_factory=list)
     summary: ReviewSummary
     artifacts: ReviewArtifacts
+    # Optional so an older report still validates; new runs always set it.
+    tool: ToolProvenance | None = None
 
 
 class ReviewRequest(BaseModel):

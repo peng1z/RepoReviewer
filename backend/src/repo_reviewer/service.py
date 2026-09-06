@@ -8,6 +8,7 @@ from uuid import uuid4
 
 from .markdown import render_review_markdown
 from .models import ProgressEvent, ReviewArtifacts, ReviewJob, ReviewRequest, ReviewResult, ReviewState
+from .provenance import tool_provenance
 from .workflow import build_graph
 
 
@@ -58,6 +59,7 @@ async def run_review(
             json_path=str(json_path.resolve()),
             markdown_path=str(markdown_path.resolve()),
         ),
+        tool=tool_provenance(),
     )
 
     json_path.write_text(json.dumps(result.model_dump(mode="json"), indent=2), encoding="utf-8")

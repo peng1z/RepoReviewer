@@ -6,6 +6,10 @@ import type { NextConfig } from "next";
 // backend behind it. The two outputs are mutually exclusive, so the static
 // build opts in rather than the mode being switched globally.
 const nextConfig: NextConfig = {
+  // Directory-style output, so a case URL survives a refresh on any static
+  // host. Without it the export writes cases/<slug>.html and a plain server
+  // answers 404 for /cases/<slug> -- verified, not assumed.
+  trailingSlash: true,
   reactStrictMode: true,
   ...(process.env.NEXT_OUTPUT === "export" ? { output: "export" as const } : {}),
 };
