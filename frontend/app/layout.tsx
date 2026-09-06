@@ -82,10 +82,19 @@ const STRUCTURED_DATA = {
   },
 };
 
+const DIRECTION_CONTRACT = "<!-- THESIS: A ledger of 65 findings and what checking each one found, refusing the card deck this category ships -- rows are compared, not admired, and a border around each one is a border between the reader and the comparison. OWN-WORLD: White ground, system sans with tabular figures, mono for paths and line numbers only, one slate-blue accent, verdict colour that never carries meaning alone; rules divide and nothing encloses. STORY: A researcher reads what the checking established before the model's own summary, compares four separate claims down a column, and leaves able to cite the paper. FIRST VIEWPORT: Nav rule, heading, what it does in three lines, the recorded-not-live notice with a link straight to the review; the run form is a disclosure, because this deployment starts nothing. FORM: Category standard executed straight; candidate 4 of 7 on the grounded list, taken as the standing exit. Seed da9de08a. FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, DESIGN.md, and every shipping raster carrying its provenance. -->";
+
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en">
       <body>
+                {/* The direction this page commits to, in the emitted markup so it can
+            be audited against what shipped. A JSX comment never reaches the
+            output; this does. */}
+        <div
+          suppressHydrationWarning
+          dangerouslySetInnerHTML={{ __html: DIRECTION_CONTRACT }}
+        />
         <script
           type="application/ld+json"
           // The payload is a literal in this file, not user or model input.

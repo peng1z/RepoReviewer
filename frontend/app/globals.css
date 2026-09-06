@@ -1,52 +1,452 @@
+/*
+  RepoReviewer reads as a ledger, because that is what it holds: 65 findings
+  in parallel, each carrying four separate claims a reader compares across
+  rows. Cards would put a border around every row and make scanning them the
+  slowest way to read the page. So: one continuous ruled column, aligned
+  fields, tabular figures, and colour used only where a verdict already says
+  the same thing in words.
+
+  White ground rather than the cream this started with. The reader is an
+  academic checking a claim against a PDF open beside this page, at a desk, in
+  daylight; matching that page is worth more than atmosphere.
+*/
+
 :root {
-  --bg: #f3efe6;
-  --bg-accent: radial-gradient(circle at top left, rgba(15, 76, 117, 0.18), transparent 35%),
-    radial-gradient(circle at bottom right, rgba(191, 87, 0, 0.16), transparent 30%);
-  --panel: rgba(255, 252, 245, 0.88);
-  --panel-strong: #fffaf0;
-  --border: rgba(44, 62, 80, 0.15);
-  --text: #1b2838;
-  --muted: #546273;
-  --high: #8f1d1d;
-  --medium: #9a5b00;
-  --low: #1e5f46;
-  --accent: #0f4c75;
-  --shadow: 0 18px 40px rgba(19, 34, 56, 0.12);
-  --radius: 20px;
+  color-scheme: light;
+
+  /* Ink. A hair off black so long passages do not vibrate. */
+  --ink: #16191d;
+  --ink-2: #4a5058;
+  --ink-3: #767d86;
+
+  --paper: #ffffff;
+  --paper-2: #f7f8f9;
+  --rule: #e2e5e8;
+  --rule-strong: #c8ccd1;
+
+  /* One accent, for structure and links. */
+  --accent: #1f4e79;
+  --accent-wash: #eef3f8;
+
+  /* Verdicts. Never the only carrier: each is labelled in words beside it. */
+  --ok: #1a6b45;
+  --warn: #8a5a00;
+  --bad: #a32a26;
+
+  --measure: 68ch;
+  --gap: 1.5rem;
+
+  --sans:
+    ui-sans-serif, -apple-system, "Segoe UI Variable Text", "Segoe UI",
+    Roboto, "Helvetica Neue", Arial, sans-serif;
+  --mono:
+    ui-monospace, "SF Mono", "Cascadia Mono", "Roboto Mono", Menlo, Consolas,
+    monospace;
 }
 
 * {
   box-sizing: border-box;
 }
 
-html,
-body {
-  margin: 0;
-  padding: 0;
-  min-height: 100%;
-  background: var(--bg);
-  background-image: var(--bg-accent);
-  color: var(--text);
-  font-family: Georgia, "Times New Roman", serif;
+html {
+  -webkit-text-size-adjust: 100%;
 }
 
 body {
+  margin: 0;
   min-height: 100vh;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 16px;
+  line-height: 1.65;
+  /* Figures line up down a column of findings, counts and line numbers. */
+  font-variant-numeric: tabular-nums;
+  text-rendering: optimizeLegibility;
+}
+
+/*
+  The surfaces nobody draws still carry the design. Left at their defaults
+  they announce that the page was assembled rather than built.
+*/
+::selection {
+  background: var(--accent-wash);
+  color: var(--ink);
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+* {
+  scrollbar-color: var(--rule-strong) transparent;
+  scrollbar-width: thin;
+}
+
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: var(--rule-strong);
+  border: 3px solid var(--paper);
+  border-radius: 6px;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--ink-3);
+}
+
+h1,
+h2,
+h3 {
+  line-height: 1.2;
+  letter-spacing: -0.015em;
+  text-wrap: balance;
+  margin: 0;
+}
+
+h1 {
+  font-size: clamp(1.9rem, 1.2rem + 2.2vw, 2.9rem);
+  font-weight: 640;
+}
+
+h2 {
+  font-size: 1.35rem;
+  font-weight: 640;
+}
+
+h3 {
+  font-size: 1rem;
+  font-weight: 620;
+}
+
+/*
+  More space above a heading than below it, so a heading joins what follows
+  rather than trailing what came before. The cards used to supply this as
+  padding; removing them showed there was no spacing system underneath.
+*/
+h2 + p,
+h3 + p,
+h2 + ul,
+h3 + ul,
+h2 + ol,
+h3 + ol,
+h2 + dl,
+h3 + dl {
+  margin-top: 8px;
+}
+
+h3 {
+  margin-top: 32px;
+}
+
+p + p,
+p + ul,
+p + ol,
+ul + p,
+ol + p {
+  margin-top: 14px;
+}
+
+ul,
+ol,
+dl {
+  margin: 0;
+}
+
+li + li {
+  margin-top: 6px;
+}
+
+p {
+  margin: 0;
+  /* min() so the measure never exceeds the viewport: 68ch is a reading
+     comfort, not a floor, and at 390px it was pushing text off-screen. */
+  max-width: min(var(--measure), 100%);
+}
+
+dl,
+ul,
+ol,
+table {
+  max-width: 100%;
 }
 
 a {
-  color: inherit;
-  text-decoration: none;
+  color: var(--accent);
+  text-underline-offset: 0.18em;
+  text-decoration-thickness: from-font;
+}
+
+a:hover {
+  text-decoration-thickness: 2px;
+}
+
+code,
+kbd,
+pre {
+  font-family: var(--mono);
+  font-size: 0.86em;
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 button,
 input,
-select {
+select,
+textarea {
   font: inherit;
+  color: inherit;
 }
 
-pre {
-  margin: 0;
-  white-space: pre-wrap;
-  word-break: break-word;
+summary {
+  cursor: pointer;
+}
+
+summary::marker {
+  color: var(--ink-3);
+}
+
+/* One authored moment: a disclosure opening, not an entrance on every block. */
+@media (prefers-reduced-motion: no-preference) {
+  details[open] > *:not(summary) {
+    animation: reveal 220ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+}
+
+@keyframes reveal {
+  from {
+    opacity: 0;
+    transform: translateY(-2px);
+  }
+}
+
+/* --- Progressive disclosure -------------------------------------------
+   65 findings, every one fully expanded, made a 45,000px page. Nobody
+   scrolls that, so the page asserted 65 things nobody read. A finding is
+   now a row until a reader asks for it, and the row carries the three
+   things you would scan for -- where it points, how the model rated it,
+   and whether anyone checked it -- so opening one is a decision rather
+   than a lottery.
+
+   Severity is weight, not hue. It is the model's own rating, not a
+   finding about the code, and colour on this page already means "a human
+   checked this and here is what they found". Two reds meaning opposite
+   things in one row is worse than no colour at all.
+*/
+.finding {
+  border-top: 1px solid var(--rule);
+}
+
+.finding > summary {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 8px 11px 0;
+  cursor: pointer;
+  list-style: none;
+}
+
+.finding > summary::-webkit-details-marker {
+  display: none;
+}
+
+.finding > summary:hover {
+  background: var(--paper-2);
+}
+
+.finding[open] > summary {
+  background: var(--paper-2);
+}
+
+.finding-head {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.finding-where {
+  font-family: var(--mono);
+  font-size: 0.82rem;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.finding-what {
+  font-size: 0.88rem;
+  color: var(--ink-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.finding-body {
+  padding: 4px 0 22px;
+}
+
+.sev {
+  width: 9px;
+  height: 9px;
+  flex: none;
+  border: 1px solid var(--ink-3);
+}
+
+.sev[data-sev="high"] {
+  background: var(--ink);
+  border-color: var(--ink);
+}
+
+.sev[data-sev="medium"] {
+  background: var(--ink-3);
+}
+
+.sev[data-sev="low"] {
+  background: transparent;
+  border-color: var(--rule-strong);
+}
+
+/* A verdict in one word, at the end of the row it belongs to. */
+.verdict {
+  font-size: 0.8rem;
+  font-weight: 600;
+  white-space: nowrap;
+  padding: 2px 9px;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+}
+
+/* A group of findings, closed unless it is the one people came for. */
+.group-summary {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  cursor: pointer;
+  list-style: none;
+  padding: 10px 0;
+  font-weight: 620;
+  font-size: 1.05rem;
+  border-bottom: 2px solid var(--ink);
+}
+
+.group-summary::-webkit-details-marker {
+  display: none;
+}
+
+.group-summary::before {
+  content: "▸";
+  color: var(--ink-3);
+  font-size: 0.8em;
+}
+
+details[open] > .group-summary::before {
+  content: "▾";
+}
+
+.group-count {
+  margin-left: auto;
+  font-weight: 500;
+  font-size: 0.88rem;
+  color: var(--ink-3);
+}
+
+/* --- Chrome of an instrument ------------------------------------------
+   This is a code review tool, and its native tongue is the terminal: a
+   title bar across the top, monospace for anything the machine produced,
+   and figures in a ruled grid rather than on a coloured wash. Nothing
+   here is borrowed from the reading page next door -- the two projects
+   had converged on one component set, which is how two unrelated things
+   end up looking like one template.
+*/
+.topbar {
+  background: var(--ink);
+  color: #f4f6f8;
+  margin: 0 -20px 36px;
+  padding: 13px 20px;
+}
+
+.topbar-inner {
+  max-width: 860px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.wordmark {
+  font-family: var(--mono);
+  font-size: 0.9rem;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+}
+
+.wordmark::before {
+  content: "$ ";
+  color: #7fb2e5;
+}
+
+.topbar nav {
+  display: flex;
+  gap: 18px;
+  flex-wrap: wrap;
+  font-family: var(--mono);
+  font-size: 0.8rem;
+}
+
+.topbar nav a {
+  color: #c8d4e0;
+  text-decoration: none;
+}
+
+.topbar nav a:hover {
+  color: #fff;
+  text-decoration: underline;
+}
+
+/* Figures in cells, the way a coverage report or a CI summary prints them. */
+.glance {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(7.5rem, 1fr));
+  border: 1px solid var(--rule-strong);
+  border-bottom-width: 2px;
+  margin-top: 20px;
+  font-family: var(--mono);
+}
+
+.glance-item {
+  padding: 12px 14px;
+  border-right: 1px solid var(--rule);
+}
+
+.glance-item:last-child {
+  border-right: 0;
+}
+
+.glance-value {
+  font-size: 1.45rem;
+  font-weight: 500;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+
+.glance-label {
+  font-size: 0.72rem;
+  color: var(--ink-2);
+  margin-top: 4px;
+}
+
+.verdict,
+.group-count,
+.drawer-count {
+  font-family: var(--mono);
 }

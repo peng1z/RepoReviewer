@@ -69,9 +69,16 @@ describe("ReviewDashboard", () => {
     expect(run.checks).toHaveLength(run.result.comments.length);
 
     // Findings without a hand check say so plainly rather than being left bare.
+    // The status appears twice per finding by design -- on the collapsed row,
+    // so it is visible without opening anything, and in the axes inside -- so
+    // these count the axes, which is the one place every finding has exactly
+    // one of. A bare phrase count would pass whichever of the two went missing.
     const unchecked = run.checks.filter((check) => !check.verdict).length;
-    expect(screen.getAllByText("not read by hand")).toHaveLength(unchecked);
-    expect(screen.getAllByText("not established")).toHaveLength(unchecked);
+    expect(screen.getAllByText("not read by hand", { selector: "dd" })).toHaveLength(unchecked);
+    expect(screen.getAllByText("not established", { selector: "dd" })).toHaveLength(unchecked);
+    expect(screen.getAllByText("not read by hand", { selector: ".verdict" })).toHaveLength(
+      unchecked,
+    );
 
     // The hand-checked ones carry their note.
     for (const check of run.checks) {
@@ -163,8 +170,12 @@ describe("what each finding actually claims", () => {
       (check) => check.citation === "code line" && check.verdict === "false-positive",
     );
     expect(citesCodeButWrong.length).toBeGreaterThan(0);
-    expect(screen.getAllByText("not in the code").length).toBe(
-      run.checks.filter((check) => check.verdict === "false-positive").length,
+    const falsePositives = run.checks.filter(
+      (check) => check.verdict === "false-positive",
+    ).length;
+    expect(screen.getAllByText("not in the code", { selector: "dd" }).length).toBe(falsePositives);
+    expect(screen.getAllByText("not in the code", { selector: ".verdict" }).length).toBe(
+      falsePositives,
     );
   });
 });
@@ -226,7 +237,11 @@ describe("citation", () => {
     render(<ReviewDashboard />);
 
     // Clipboard access can be refused, so the entry has to be selectable too.
-    expect(screen.getByText(/@misc\{zhang2026reporeviewer/)).toBeInTheDocument();
+    // It sits behind a labelled disclosure rather than printing 11 lines of
+    // BibTeX at every reader, which is one click and no clipboard.
+    const entry = screen.getByText(/@misc\{zhang2026reporeviewer/);
+    expect(entry).toBeInTheDocument();
+    expect(entry.closest("details")?.querySelector("summary")?.textContent).toMatch(/BibTeX/i);
     expect(screen.getByRole("button", { name: /copy bibtex/i })).toBeInTheDocument();
   });
 
