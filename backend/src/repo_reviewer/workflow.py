@@ -12,7 +12,7 @@ from .models import ProgressEvent, ProjectContext, ReviewComment, ReviewRequest,
 from .prompts import CONTEXT_SYSTEM_PROMPT, REVIEW_SYSTEM_PROMPT, SUMMARY_SYSTEM_PROMPT
 from .provider import (
     build_comments,
-    drop_unreachable_lines,
+    clear_uncitable_lines,
     coerce_comment_payload,
     normalize_comments,
     parse_json_response,
@@ -185,14 +185,10 @@ async def review_agent(state: ReviewState, progress: ProgressCallback | None = N
         # Only one file was sent, so a finding that omits `file` belongs to it.
         parsed, dropped = build_comments(raw_comments, default_file=file_name)
         # The model cites positions in the file it was shown, and sometimes
-        # cites positions that are not in it. extract_snippet already returned
-        # an empty string for those, which was the available signal and was
-        # thrown away; check the bound explicitly instead. The bound is the
-        # truncated content rather than the file on disk, because a line past
-        # the truncation is one the model never read.
-        unreachable = drop_unreachable_lines(
-            parsed, {file_name: len(content.splitlines())}
-        )
+        # cites positions that cannot hold what it describes -- past the end of
+        # the file, or blank. Checked against the content actually sent, since a
+        # line past a truncation is one the model never read.
+        uncitable = clear_uncitable_lines(parsed, {file_name: content.splitlines()})
         for comment in parsed:
             comment.snippet = extract_snippet(path, comment.line, radius=6)
         comments.extend(parsed)
@@ -200,8 +196,8 @@ async def review_agent(state: ReviewState, progress: ProgressCallback | None = N
         note = f"Reviewed {file_name}"
         if dropped:
             note += f" ({len(dropped)} malformed finding(s) skipped: {dropped[0]})"
-        if unreachable:
-            note += f" ({len(unreachable)} line number(s) outside the file cleared)"
+        if uncitable:
+            note += f" ({len(uncitable)} unusable line number(s) cleared)"
         if truncated_from:
             note += f" (partial: {len(content)} of {truncated_from} characters)"
         await emit(

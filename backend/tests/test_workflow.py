@@ -209,7 +209,25 @@ async def test_review_clears_a_line_number_past_the_end_of_the_file(sample_repo,
     by_issue = {comment.issue: comment for comment in state.comments}
     assert by_issue["assert can be disabled with -O"].line is None
     assert by_issue["in range"].line == 2
-    assert any("outside the file cleared" in event.message for event in events)
+    assert any("unusable line number(s) cleared" in event.message for event in events)
+
+
+@pytest.mark.asyncio
+async def test_review_clears_a_line_number_pointing_at_a_blank_line(sample_repo, fake_llm) -> None:
+    # A blank line cannot be what a finding describes. This was the largest
+    # category of bad citation in a review of psf/requests: 21 of 77.
+    spaced = sample_repo / "pkg" / "spaced.py"
+    spaced.write_text("import os\n\ndef f():\n    return os\n", encoding="utf-8")
+    fake_llm.on_review([
+        {"file": "pkg/spaced.py", "line": 2, "severity": "low", "issue": "b", "suggestion": "s"},
+        {"file": "pkg/spaced.py", "line": 3, "severity": "low", "issue": "c", "suggestion": "s"},
+    ])
+
+    state = await review_agent(_prepared(sample_repo, ["pkg/spaced.py"]))
+
+    by_issue = {comment.issue: comment for comment in state.comments}
+    assert by_issue["b"].line is None
+    assert by_issue["c"].line == 3
 
 
 @pytest.mark.asyncio
