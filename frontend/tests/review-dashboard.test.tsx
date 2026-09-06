@@ -70,7 +70,8 @@ describe("ReviewDashboard", () => {
 
     // Findings without a hand check say so plainly rather than being left bare.
     const unchecked = run.checks.filter((check) => !check.verdict).length;
-    expect(screen.getAllByText(/Not checked by hand/)).toHaveLength(unchecked);
+    expect(screen.getAllByText("not read by hand")).toHaveLength(unchecked);
+    expect(screen.getAllByText("not established")).toHaveLength(unchecked);
 
     // The hand-checked ones carry their note.
     for (const check of run.checks) {
@@ -103,8 +104,22 @@ describe("ReviewDashboard", () => {
     );
     expect(heading).toBeInTheDocument();
 
+    // Each reason appears once as a disclosure summary, carrying its count.
+    // The text is split across nodes, so match on the summary's textContent.
     const reasons = new Set(run.result.skipped_files.map((item) => item.reason));
-    expect(screen.getAllByRole("group").length).toBe(reasons.size);
+    const summaries = [...document.querySelectorAll("summary")].map(
+      (node) => node.textContent ?? "",
+    );
+    for (const reason of reasons) {
+      expect(summaries.filter((text) => text.includes(reason))).toHaveLength(1);
+    }
+    // The paths stay behind the disclosure rather than filling the page.
+    for (const reason of reasons) {
+      const count = run.result.skipped_files.filter((item) => item.reason === reason).length;
+      expect(summaries.some((text) => text.includes(String(count)) && text.includes(reason))).toBe(
+        true,
+      );
+    }
   });
 
   it("reports the files the max_files cap left unread", () => {
@@ -125,5 +140,116 @@ describe("ReviewDashboard", () => {
 
     expect(screen.queryByRole("link", { name: /download json/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: /download markdown/i })).not.toBeInTheDocument();
+  });
+});
+
+describe("what each finding actually claims", () => {
+  it("separates the model's severity from whether the issue is real", () => {
+    render(<ReviewDashboard />);
+
+    // A finding can cite a real line of code and still be wrong about it, and
+    // it can be right about a real defect while pointing somewhere unrelated.
+    expect(screen.getAllByText("Model severity")).toHaveLength(run.checks.length);
+    expect(screen.getAllByText("Line citation")).toHaveLength(run.checks.length);
+    expect(screen.getAllByText("Issue itself")).toHaveLength(run.checks.length);
+    expect(screen.getAllByText("Check status")).toHaveLength(run.checks.length);
+  });
+
+  it("does not let a valid line stand in for a correct finding", () => {
+    render(<ReviewDashboard />);
+
+    // Findings that cite real code but describe nothing that is there.
+    const citesCodeButWrong = run.checks.filter(
+      (check) => check.citation === "code line" && check.verdict === "false-positive",
+    );
+    expect(citesCodeButWrong.length).toBeGreaterThan(0);
+    expect(screen.getAllByText("not in the code").length).toBe(
+      run.checks.filter((check) => check.verdict === "false-positive").length,
+    );
+  });
+});
+
+describe("the model summary versus the checking", () => {
+  it("leads with what the checking found, not with the model's headline", () => {
+    render(<ReviewDashboard />);
+
+    const checked = screen.getByRole("heading", { name: /What the checking found/i });
+    const modelSummary = screen.getByText(/Model summary, unedited/i);
+
+    // The model's headline named two defects as requiring immediate fixes and
+    // both were checked as false positives. Leading with it asserts defects in
+    // someone else's repository and corrects itself far below.
+    expect(
+      checked.compareDocumentPosition(modelSummary) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  it("keeps the model's headline verbatim, collapsed and labelled", () => {
+    render(<ReviewDashboard />);
+
+    // Not rewritten: the recorded output is evidence, and editing it to read
+    // better would make the recording a claim about itself.
+    const headline = screen.getByText(run.result.summary.headline);
+    expect(headline).toBeInTheDocument();
+    expect(headline.closest("details")).not.toBeNull();
+    expect(headline.closest("details")).not.toHaveAttribute("open");
+  });
+
+  it("states the checked counts without turning them into an accuracy rate", () => {
+    render(<ReviewDashboard />);
+
+    const byHand = run.checks.filter((check) => check.verdict).length;
+    expect(
+      screen.getByText(new RegExp(`${byHand} high-severity ones were read`, "i")),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/does not measure the system's accuracy/i),
+    ).toBeInTheDocument();
+  });
+});
+
+describe("citation", () => {
+  it("links the paper the artifact accompanies", () => {
+    render(<ReviewDashboard />);
+
+    // The site had no link to the paper at all, which was the largest gap for
+    // a reader who wanted to cite the work.
+    const abstract = screen.getByRole("link", { name: /^Abstract$/ });
+    expect(abstract).toHaveAttribute("href", "https://arxiv.org/abs/2603.16107");
+    expect(screen.getByRole("link", { name: /^PDF$/ })).toHaveAttribute(
+      "href",
+      "https://arxiv.org/pdf/2603.16107",
+    );
+  });
+
+  it("offers a BibTeX entry that is on screen, not only on the clipboard", () => {
+    render(<ReviewDashboard />);
+
+    // Clipboard access can be refused, so the entry has to be selectable too.
+    expect(screen.getByText(/@misc\{zhang2026reporeviewer/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /copy bibtex/i })).toBeInTheDocument();
+  });
+
+  it("keeps the paper below the review rather than above it", () => {
+    render(<ReviewDashboard />);
+
+    const review = screen.getByText(/Recorded review, checked against the code/i);
+    const paper = screen.getByRole("heading", { name: /^Cite this work$/ });
+    // A demo page whose first screen is a paper header has become a product
+    // page for its own demo.
+    expect(review.compareDocumentPosition(paper) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+});
+
+describe("case artifacts", () => {
+  it("links each finding into the source at the reviewed commit", () => {
+    // Checked on the case page rather than the dashboard: the dashboard shows
+    // the review, the case page is the citable document.
+    const commit = run.commit;
+    expect(commit).toMatch(/^[0-9a-f]{7,40}$/);
+    // A link built from the default branch would drift as the branch moves.
+    expect(`https://github.com/${run.label}/blob/${commit}/src/requests/cookies.py#L110`).toContain(
+      commit,
+    );
   });
 });

@@ -116,3 +116,42 @@ async def test_launch_marks_a_job_failed_and_keeps_the_reason(monkeypatch, tmp_p
     assert job.status == "failed"
     assert "clone refused" in job.error
     assert job.result is None
+
+
+@pytest.mark.asyncio
+async def test_report_records_what_produced_it(local_clone, fake_llm, tmp_path) -> None:
+    # A report naming only a model leaves a reader unable to tell which build
+    # ran, and the pipeline has changed in ways that change its output.
+    _script(fake_llm)
+
+    result = await run_review(_request(tmp_path))
+
+    assert result.tool is not None
+    assert result.tool.name == "RepoReviewer"
+    assert result.tool.version
+    assert result.tool.method_paper == "https://arxiv.org/abs/2603.16107"
+    assert "not an experiment the paper reports" in result.tool.method_paper_note
+
+    exported = json.loads(Path(result.artifacts.json_path).read_text())
+    assert exported["tool"]["name"] == "RepoReviewer"
+    # Existing consumers read these keys; the addition must not move them.
+    for key in ("repo_url", "comments", "summary", "skipped_files", "artifacts"):
+        assert key in exported
+
+    markdown = Path(result.artifacts.markdown_path).read_text()
+    assert "## Produced with" in markdown
+    assert "Method paper: https://arxiv.org/abs/2603.16107" in markdown
+
+
+@pytest.mark.asyncio
+async def test_export_carries_no_credentials(local_clone, fake_llm, tmp_path, monkeypatch) -> None:
+    # A report is a file a user shares. A key that reaches it is a key leaked.
+    monkeypatch.setenv("OPENROUTER_API_KEY", "sk-test-should-never-appear")
+    _script(fake_llm)
+
+    result = await run_review(_request(tmp_path))
+
+    for path in (result.artifacts.json_path, result.artifacts.markdown_path):
+        text = Path(path).read_text()
+        assert "sk-test-should-never-appear" not in text
+        assert "api_key" not in text.lower()
