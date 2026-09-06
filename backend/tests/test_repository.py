@@ -9,7 +9,7 @@ def test_should_ignore_matches_glob() -> None:
 
 def test_prioritize_files_prefers_source_files() -> None:
     files = [Path("README.md"), Path("docs/guide.md"), Path("src/main.py"), Path("package.json")]
-    prioritized = prioritize_files(files, 2)
+    prioritized, _ = prioritize_files(files, 2)
     assert Path("README.md") in prioritized
     assert Path("src/main.py") in prioritized
 
@@ -55,7 +55,8 @@ def test_collect_reports_a_reason_for_every_skip(tmp_path) -> None:
 
 def test_prioritise_puts_readme_then_source_then_config(tmp_path) -> None:
     files = [Path(n) for n in ("setup.cfg", "pkg/deep/mod.py", "README.md", "package.json", "notes.md", "app.py")]
-    ordered = [p.as_posix() for p in prioritize_files(files, max_files=10)]
+    selected, _ = prioritize_files(files, max_files=10)
+    ordered = [p.as_posix() for p in selected]
     assert ordered[0] == "README.md"
     assert ordered[1:3] == ["app.py", "pkg/deep/mod.py"]      # source, shallow first
     assert ordered.index("package.json") < ordered.index("notes.md")
@@ -63,7 +64,12 @@ def test_prioritise_puts_readme_then_source_then_config(tmp_path) -> None:
 
 def test_prioritise_truncates_to_max_files() -> None:
     files = [Path(f"m{i}.py") for i in range(10)]
-    assert len(prioritize_files(files, max_files=3)) == 3
+    selected, dropped = prioritize_files(files, max_files=3)
+    assert len(selected) == 3
+    # The remainder used to disappear; it is returned so the caller can
+    # account for it.
+    assert len(dropped) == len(files) - 3
+    assert set(selected).isdisjoint(dropped)
 
 
 def test_snippet_is_centred_on_the_line_and_numbered(tmp_path) -> None:

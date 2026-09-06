@@ -345,7 +345,8 @@ def resolve_reviewable_files(
         include_tests=include_tests,
         max_file_bytes=max_file_bytes,
     )
-    return [path.as_posix() for path in prioritize_files(accepted, max_files)]
+    selected, _ = prioritize_files(accepted, max_files)
+    return [path.as_posix() for path in selected]
 
 
 def plan_mutants(repo_root: Path, target: BenchmarkTarget, dataset: BenchmarkDataset) -> list[Mutant]:
