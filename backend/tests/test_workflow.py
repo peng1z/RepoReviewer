@@ -467,3 +467,49 @@ async def test_review_says_nothing_about_truncation_when_it_sent_the_whole_file(
 
     assert "[TRUNCATED:" not in fake_llm.calls[0]["user"]
     assert not any(item.reason.startswith("partially reviewed") for item in state.skipped_files)
+
+
+@pytest.mark.parametrize(
+    ("item", "expected"),
+    [
+        (
+            {"file": "a.py", "line": 124, "severity": "high", "issue": "no return"},
+            "High: no return (a.py:124)",
+        ),
+        ({"file": "a.py", "severity": "medium", "issue": "no line"}, "Medium: no line (a.py)"),
+        ({"issue": "bare"}, "bare"),
+        ({"summary": "other key"}, "other key"),
+        ("already prose", "already prose"),
+    ],
+)
+def test_summary_entries_read_as_sentences(item, expected) -> None:
+    # Asked for top_findings, models often answer with finding objects. str()
+    # on a dict put Python's repr at the top of the report.
+    assert _coerce_string_list([item]) == [expected]
+
+
+def test_summary_entries_of_an_unknown_shape_are_left_alone() -> None:
+    # Better an unhelpful string than a guessed one.
+    assert _coerce_string_list([{"unexpected": "shape"}]) == ["{'unexpected': 'shape'}"]
+    assert _coerce_string_list([42]) == ["42"]
+
+
+@pytest.mark.asyncio
+async def test_summary_renders_structured_findings_from_the_model(local_clone, fake_llm) -> None:
+    fake_llm.on_context(CONTEXT_JSON)
+    fake_llm.on_review([])
+    fake_llm.on_summary({
+        "headline": "ok",
+        "top_findings": [
+            {"file": "pkg/core.py", "line": 4, "severity": "high", "issue": "boundary"}
+        ],
+    })
+    state = _state(local_clone)
+    state.workspace_dir = None
+
+    state = await cloner_agent(state)
+    state = await context_agent(state)
+    state = await review_agent(state)
+    state = await summary_agent(state)
+
+    assert state.summary.top_findings == ["High: boundary (pkg/core.py:4)"]
