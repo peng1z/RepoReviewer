@@ -155,11 +155,57 @@ the malformed entry instead is tracked as follow-up work.
 3. `benchmark-by-repo.csv` added, so repository variance is visible instead of
    being averaged away.
 
+## What later work says about these numbers
+
+Three defects found after this run bear on how much weight the positional
+metric can carry. None of them change a number above -- those were measured,
+not recomputed -- but the reader should not take `positional hit` to be as
+firm as the table makes it look.
+
+**Line numbers are unreliable in ways this metric assumes away.** A ±3
+tolerance presumes the model is roughly right about where it is looking. In a
+70-finding review of psf/requests run after this benchmark, only 46 findings
+cited a line containing code. 21 cited a blank line, 2 cited a line past the
+end of the file, 5 cited a comment. Reading the high-severity findings against
+the source showed the rest of the gap: the observation was often right and the
+line wrong by 7 to 36. A hit inside ±3 is therefore weaker evidence of
+localisation than it reads as, and the rate at which a wrong line lands inside
+the window by luck is not something this run measured. The chance baseline
+models *how many findings* a method produces, not *how accurately each one is
+placed*.
+
+**Part of every large file was invisible to the reviewer.** At commit
+`6e80e99` the review sent `path.read_text(...)[:12_000]` while file collection
+accepted anything up to `max_file_bytes`, 40,000 by default. Any mutant placed
+past the first 12,000 characters of its file was outside what the model was
+shown, and would score as a miss for a reason unrelated to the method under
+test. Reconstructing the selection rules on the three repositories puts one of
+fifteen top-ranked files over that boundary, but the benchmark wrote its own
+`.repo-reviewer.toml` per target and the artifacts record neither file sizes
+nor which lines were visible, so the real exposure cannot be recovered. It is a
+confound of unknown size, not a known-small one.
+
+**Coverage was reported as larger than it was.** `prioritize_files` returned
+`sorted(...)[:max_files]` and the remainder disappeared with no record, so a
+run reported the files it rejected with reasons and said nothing about
+eligible files it never opened.
+
+All three are fixed now, which means a re-run is not comparable to this one on
+the positional metric. That is the honest reading: this table describes what
+that pipeline did on that day, and the pipeline has since changed in ways that
+affect the measurement itself.
+
 ## What a next run should do differently
 
 - **More repositories, not more mutants.** Repository variance dominates.
 - **Report lift, not raw detection**, when comparing methods.
 - **Treat weak hits as secondary.** Even with narrowed keywords they are a
-  proxy; positional hits are the defensible measure.
+  proxy. Positional hits are the better measure, but see the section above --
+  they are not the firm one this report originally implied, and a run that
+  wants to lean on them should first record file sizes and the visible line
+  range for every outcome.
+- **Record what the model could see.** Neither file length nor the truncation
+  point was stored, which is why the exposure above cannot be quantified after
+  the fact.
 - An LLM judge as a second opinion on weak hits, reported separately from the
   keyword metric rather than replacing it.
