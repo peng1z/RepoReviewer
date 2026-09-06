@@ -65,3 +65,6 @@ Desktop.ini
 # Not a secret: the local backend address, needed for `npm run dev` to reach a
 # backend running on this machine. Real credentials live in .env, still ignored.
 !frontend/.env.development
+
+# Impeccable design-flow working files (PRODUCT.md is committed; this is state)
+.impeccable/

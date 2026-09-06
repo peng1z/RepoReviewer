@@ -1,8 +1,8 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { Fragment, FormEvent, useEffect, useState } from "react";
 
-import type { ProgressEvent, ReviewJob, ReviewResult, Severity } from "../lib/types";
+import type { ProgressEvent, ReviewComment, ReviewJob, ReviewResult, Severity } from "../lib/types";
 import { demoRuns } from "../demo";
 import type { Citation, DemoRun, FindingCheck, Verdict } from "../demo/types";
 
@@ -47,6 +47,13 @@ const VERDICT_LABELS: Record<Verdict, string> = {
   misplaced: "Checked: right issue, wrong line",
   "false-positive": "Checked: false positive",
   unverified: "Checked: could not settle",
+};
+
+const VERDICT_SHORT: Record<Verdict, string> = {
+  accurate: "in the code, at the line cited",
+  misplaced: "in the code, at a different line",
+  "false-positive": "not in the code",
+  unverified: "could not be settled",
 };
 
 const CITATION_LABELS: Record<Citation, string> = {
@@ -161,17 +168,56 @@ export function ReviewDashboard() {
             backdropFilter: "blur(14px)",
           }}
         >
-          <p style={{ letterSpacing: "0.18em", textTransform: "uppercase", color: "var(--accent)", margin: 0 }}>
-            RepoReviewer
-          </p>
+          <nav
+            aria-label="Primary"
+            style={{
+              display: "flex",
+              gap: 18,
+              flexWrap: "wrap",
+              justifyContent: "space-between",
+              alignItems: "baseline",
+            }}
+          >
+            <p
+              style={{
+                letterSpacing: "0.18em",
+                textTransform: "uppercase",
+                color: "var(--accent)",
+                margin: 0,
+              }}
+            >
+              RepoReviewer
+            </p>
+            <span style={{ display: "flex", gap: 18, flexWrap: "wrap" }}>
+              <a href="https://arxiv.org/abs/2603.16107">Paper</a>
+              <a href="https://github.com/peng1z/RepoReviewer">Code</a>
+              <a href="#recorded-review">Example</a>
+              <a href="#cite">Cite</a>
+            </span>
+          </nav>
           <h1 style={{ margin: "12px 0 10px", fontSize: "clamp(2.2rem, 5vw, 4.2rem)" }}>
             Multi-agent code review for GitHub repositories
           </h1>
           <p style={{ color: "var(--muted)", maxWidth: 760, fontSize: "1.08rem", lineHeight: 1.6 }}>
-            Start a repo or pull request review locally, stream each agent step, then inspect and download the final
-            JSON and Markdown reports.
+            Give it a repository or pull request. It clones the repo, builds project context,
+            reviews files one at a time, ranks what it found, and writes a summary, streaming each
+            agent step and ending in a JSON and Markdown report.
+          </p>
+          <p style={{ color: "var(--muted)", maxWidth: 760, fontSize: "1.08rem", lineHeight: 1.6 }}>
+            <strong style={{ color: "var(--text)" }}>
+              You are reading a recorded review, not a live one.
+            </strong>{" "}
+            {apiBase
+              ? "A backend is configured, so Run a review below will start a real one."
+              : "This deployment hosts no backend and starts nothing: reviewing a repository means cloning whatever URL is typed and spending an API key. The review below was recorded and shipped with the page."}{" "}
+            <a href="#recorded-review">Skip to it</a>, or open the panel below to run your own
+            against a backend you host.
           </p>
 
+          <details style={{ marginTop: 20 }}>
+            <summary style={{ cursor: "pointer", fontWeight: 600 }}>
+              Run a review {apiBase ? "" : "(needs a backend you run)"}
+            </summary>
           <form onSubmit={handleSubmit} style={{ display: "grid", gap: 16, marginTop: 24 }}>
             <label>
               <div style={labelStyle}>Backend URL</div>
@@ -276,6 +322,7 @@ export function ReviewDashboard() {
               {submitting ? "Starting review..." : "Run review"}
             </button>
           </form>
+          </details>
           {error ? <p style={{ color: "var(--high)" }}>{error}</p> : null}
         </section>
 
@@ -306,6 +353,8 @@ export function ReviewDashboard() {
         {demo ? (
           <ResultPanel result={demo.result} jobId={demo.slug} apiBase="" checks={demo.checks} />
         ) : null}
+
+        <Citation />
       </div>
     </main>
   );
@@ -323,7 +372,7 @@ function VerificationPanel({ run }: { run: DemoRun }) {
   const checkedCount = run.checks.filter((check) => check.verdict).length;
 
   return (
-    <section style={{ ...sectionStyle, marginTop: 24 }}>
+    <section id="recorded-review" style={{ ...sectionStyle, marginTop: 24 }}>
       <h2 style={{ margin: 0 }}>Recorded review, checked against the code</h2>
       <p style={{ color: "var(--muted)", lineHeight: 1.6, marginTop: 12 }}>
         A real run against{" "}
@@ -374,6 +423,138 @@ function VerificationPanel({ run }: { run: DemoRun }) {
   );
 }
 
+/**
+ * What the checking established, stated before the model's own summary.
+ *
+ * The model's headline named two defects as requiring immediate fixes; both
+ * were checked and neither is in the code. Three of its five top findings were
+ * false positives. Every finding below carried its verdict, but the summary --
+ * the loudest text on the page -- carried none, so the page asserted defects in
+ * someone else's repository and corrected itself hundreds of pixels lower.
+ *
+ * The model's summary is kept verbatim and collapsed beneath this, labelled.
+ * Nothing is rewritten; the order and the labelling change.
+ */
+/**
+ * Four things about a finding that are routinely collapsed into one, and are
+ * not the same claim.
+ *
+ *   severity  -- the model's own rating. Its claim, not a check.
+ *   citation  -- whether the line it cites can hold what it describes.
+ *                Mechanical, every finding, no judgement.
+ *   issue     -- whether the described problem is in the code. Needs reading.
+ *   status    -- whether anyone read it. Absent is not "fine".
+ *
+ * A finding can cite a real line of code and still be wrong about it, and it
+ * can be right about a real defect while pointing somewhere unrelated. Showing
+ * one badge lets a reader take a positional pass for a substantive one.
+ */
+function CheckAxes({ comment, check }: { comment: ReviewComment; check: FindingCheck }) {
+  const rows: { label: string; value: string; color?: string }[] = [
+    { label: "Model severity", value: comment.severity },
+    { label: "Line citation", value: CITATION_LABELS[check.citation] },
+    {
+      label: "Issue itself",
+      value: check.verdict ? VERDICT_SHORT[check.verdict] : "not established",
+      color: check.verdict ? VERDICT_COLORS[check.verdict].text : undefined,
+    },
+    {
+      label: "Check status",
+      value: check.verdict ? "read against the source by hand" : "not read by hand",
+    },
+  ];
+
+  return (
+    <div
+      style={{
+        border: `1px solid ${check.verdict ? VERDICT_COLORS[check.verdict].border : "#c9c4bb"}`,
+        borderRadius: 12,
+        padding: "10px 12px",
+        margin: "10px 0 12px",
+      }}
+    >
+      <dl
+        style={{
+          display: "grid",
+          gridTemplateColumns: "auto 1fr",
+          gap: "4px 12px",
+          margin: 0,
+          fontSize: "0.88rem",
+        }}
+      >
+        {rows.map((row) => (
+          <Fragment key={row.label}>
+            <dt style={{ color: "var(--muted)" }}>{row.label}</dt>
+            <dd style={{ margin: 0, color: row.color ?? "inherit", fontWeight: 600 }}>
+              {row.value}
+            </dd>
+          </Fragment>
+        ))}
+      </dl>
+      {check.note ? (
+        <p style={{ margin: "8px 0 0", color: "var(--muted)", lineHeight: 1.5 }}>{check.note}</p>
+      ) : null}
+    </div>
+  );
+}
+
+function CheckedSummary({
+  result,
+  checks,
+}: {
+  result: ReviewResult;
+  checks: FindingCheck[];
+}) {
+  const handChecked = checks.filter((check) => check.verdict);
+  const tally = handChecked.reduce<Record<string, number>>((acc, check) => {
+    acc[check.verdict as string] = (acc[check.verdict as string] ?? 0) + 1;
+    return acc;
+  }, {});
+  const supported = result.comments.filter((_, index) => checks[index]?.verdict === "accurate");
+  const realButMisplaced = result.comments.filter(
+    (_, index) => checks[index]?.verdict === "misplaced",
+  );
+
+  return (
+    <div
+      style={{
+        border: "1px solid var(--border)",
+        borderRadius: 18,
+        padding: 18,
+        marginBottom: 16,
+      }}
+    >
+      <h3 style={{ margin: 0 }}>What the checking found</h3>
+      <p style={{ color: "var(--muted)", lineHeight: 1.6, margin: "10px 0 0" }}>
+        Of {result.comments.length} findings, {handChecked.length} high-severity ones were read
+        against the source at the reviewed commit. {tally.accurate ?? 0} described a real problem
+        at the line cited, {tally.misplaced ?? 0} described a real problem at the wrong line, and{" "}
+        {tally["false-positive"] ?? 0} described something that is not in the code. The remaining{" "}
+        {checks.length - handChecked.length} were not read by hand and are not claimed either way.
+      </p>
+      {supported.length + realButMisplaced.length > 0 ? (
+        <>
+          <p style={{ margin: "14px 0 6px", fontWeight: 600 }}>
+            Supported by the check ({supported.length + realButMisplaced.length}):
+          </p>
+          <ul style={{ margin: 0, paddingLeft: 20, lineHeight: 1.6 }}>
+            {[...supported, ...realButMisplaced].map((comment) => (
+              <li key={`${comment.file}-${comment.issue}`}>
+                <code>{comment.file}</code> — {comment.issue}
+              </li>
+            ))}
+          </ul>
+        </>
+      ) : null}
+      <p style={{ color: "var(--muted)", lineHeight: 1.6, margin: "14px 0 0" }}>
+        This is one review of one repository. It does not measure the system's accuracy, and the
+        by-hand verdicts are themselves claims about the code, each with its evidence on the
+        finding it belongs to.
+      </p>
+    </div>
+  );
+}
+
 function ResultPanel({
   result,
   jobId,
@@ -409,8 +590,15 @@ function ResultPanel({
         ) : null}
       </div>
 
-      <div style={summaryBoxStyle}>
-        <strong>{result.summary.headline}</strong>
+      {checks ? <CheckedSummary result={result} checks={checks} /> : null}
+
+      <details style={summaryBoxStyle} open={!checks}>
+        <summary style={{ cursor: "pointer", fontWeight: 600 }}>
+          {checks
+            ? "Model summary, unedited — contains claims the checking did not support"
+            : "Summary"}
+        </summary>
+        <strong style={{ display: "block", marginTop: 12 }}>{result.summary.headline}</strong>
         <ul style={{ margin: "12px 0 0", paddingLeft: 20 }}>
           {result.summary.top_findings.map((finding) => (
             <li key={finding}>{finding}</li>
@@ -426,7 +614,7 @@ function ResultPanel({
             ))}
           </ul>
         ) : null}
-      </div>
+      </details>
 
       {severityOrder.map((severity) => {
         // Verdicts are indexed against result.comments, so the original index
@@ -448,33 +636,7 @@ function ResultPanel({
                     </strong>
                     <span style={{ textTransform: "uppercase", letterSpacing: "0.1em" }}>{comment.severity}</span>
                   </div>
-                  {check ? (
-                    <div
-                      style={{
-                        border: `1px solid ${
-                          check.verdict ? VERDICT_COLORS[check.verdict].border : "#c9c4bb"
-                        }`,
-                        borderRadius: 12,
-                        padding: "10px 12px",
-                        margin: "10px 0 12px",
-                      }}
-                    >
-                      <strong
-                        style={{
-                          color: check.verdict ? VERDICT_COLORS[check.verdict].text : "#666",
-                        }}
-                      >
-                        {check.verdict
-                          ? VERDICT_LABELS[check.verdict]
-                          : `Not checked by hand · ${CITATION_LABELS[check.citation]}`}
-                      </strong>
-                      {check.note ? (
-                        <p style={{ margin: "6px 0 0", color: "var(--muted)", lineHeight: 1.5 }}>
-                          {check.note}
-                        </p>
-                      ) : null}
-                    </div>
-                  ) : null}
+                  {check ? <CheckAxes comment={comment} check={check} /> : null}
                   <p style={{ marginBottom: 8 }}>{comment.issue}</p>
                   <p style={{ marginTop: 0, color: "var(--muted)" }}>{comment.suggestion}</p>
                   {comment.snippet ? (
@@ -498,6 +660,95 @@ function ResultPanel({
 
       <SkippedFiles files={result.skipped_files} />
     </section>
+  );
+}
+
+// Verbatim from https://peng1z.github.io/publications/reporeviewer/citation.bib,
+// which is the authority. A second, hand-written copy drifts: mine had the
+// wrong primaryClass and no DOI until it was compared against that file.
+const BIBTEX = `@misc{zhang2026reporeviewer,
+  title = {{RepoReviewer: A Local-First Multi-Agent Architecture for Repository-Level Code Review}},
+  author = {Peng Zhang},
+  year = {2026},
+  eprint = {2603.16107},
+  archivePrefix = {arXiv},
+  primaryClass = {cs.SE},
+  doi = {10.48550/arXiv.2603.16107},
+  url = {https://arxiv.org/abs/2603.16107},
+  note = {Version 1, preprint}
+}`;
+
+/**
+ * The paper this artifact accompanies, and how to cite it.
+ *
+ * Kept to a footer strip rather than a hero: the review above is what a
+ * visitor came for, and burying it under a paper header would make this a
+ * product page for a demo. But the site had no link to the paper at all, so a
+ * reader who wanted to cite the work had nowhere to go.
+ */
+function Citation() {
+  const [copied, setCopied] = useState(false);
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(BIBTEX);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Clipboard access can be refused; the entry is on screen to select.
+      setCopied(false);
+    }
+  }
+
+  return (
+    <footer id="cite" style={{ ...sectionStyle, marginTop: 24 }}>
+      <h2 style={{ margin: 0, fontSize: "1.1rem" }}>Cite this work</h2>
+      <p style={{ color: "var(--muted)", lineHeight: 1.6, margin: "10px 0 0" }}>
+        This page is the artifact for{" "}
+        <a href="https://arxiv.org/abs/2603.16107">
+          RepoReviewer: A Local-First Multi-Agent Architecture for Repository-Level Code Review
+        </a>
+        , Peng Zhang. arXiv:2603.16107, version 1 preprint, 17 March 2026. DOI{" "}
+        <a href="https://doi.org/10.48550/arXiv.2603.16107">10.48550/arXiv.2603.16107</a>.
+      </p>
+      <p style={{ color: "var(--muted)", lineHeight: 1.6, margin: "10px 0 0" }}>
+        The recording below was produced by the software at a later commit than the paper
+        describes; where the two differ, the code and the recorded run are the account of what
+        this build does, and the paper is the account of what version 1 reported.
+      </p>
+      <div style={{ display: "flex", gap: 12, flexWrap: "wrap", margin: "14px 0 0" }}>
+        <a href="https://arxiv.org/abs/2603.16107" style={buttonStyle}>
+          Abstract
+        </a>
+        <a href="https://arxiv.org/pdf/2603.16107" style={buttonStyle}>
+          PDF
+        </a>
+        <a href="https://peng1z.github.io/publications/reporeviewer/" style={buttonStyle}>
+          Paper page
+        </a>
+        <a href="https://peng1z.github.io/publications/reporeviewer/citation.bib" style={buttonStyle}>
+          BibTeX file
+        </a>
+        <a href="https://peng1z.github.io/publications/reporeviewer/citation.ris" style={buttonStyle}>
+          RIS
+        </a>
+        <button type="button" onClick={copy} style={buttonStyle}>
+          {copied ? "BibTeX copied" : "Copy BibTeX"}
+        </button>
+      </div>
+      <pre
+        style={{
+          background: "rgba(15, 76, 117, 0.08)",
+          borderRadius: 14,
+          padding: 14,
+          overflowX: "auto",
+          marginTop: 14,
+          fontSize: "0.82rem",
+        }}
+      >
+        {BIBTEX}
+      </pre>
+    </footer>
   );
 }
 
