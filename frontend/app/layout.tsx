@@ -10,6 +10,13 @@ const DESCRIPTION =
   "against the code: 65 findings, a positional check on all of them, and a " +
   "by-hand check of the 8 high-severity ones. Artifact for arXiv:2603.16107.";
 
+/* The share card. Relative, so metadataBase makes it absolute. */
+const OG_IMAGE = "/opengraph-image.png";
+const OG_ALT =
+  "A dark card headed Multi-agent code review for GitHub repositories, carrying the counts " +
+  "from the recorded review of psf/requests: 65 findings, 8 read by hand, 4 not in the code, " +
+  "1 accurate, 3 at the wrong line.";
+
 export const metadata: Metadata = {
   metadataBase: new URL(SITE),
   title: "RepoReviewer — a checked multi-agent code review of psf/requests",
@@ -31,11 +38,18 @@ export const metadata: Metadata = {
     siteName: "RepoReviewer",
     title: "RepoReviewer — a checked multi-agent code review of psf/requests",
     description: DESCRIPTION,
+    // The card lives in public/ rather than as app/opengraph-image.png. The
+    // file convention wins over an explicit openGraph.images and drops its
+    // alt with it, so the convention costs the alt text; declaring the whole
+    // thing here keeps both. (opengraph-image.alt.txt is accepted as a file
+    // on Next 15.5 and emits nothing at all.)
+    images: [{ url: OG_IMAGE, width: 1200, height: 630, alt: OG_ALT }],
   },
   twitter: {
     card: "summary_large_image",
     title: "RepoReviewer — a checked multi-agent code review of psf/requests",
     description: DESCRIPTION,
+    images: [{ url: OG_IMAGE, alt: OG_ALT }],
   },
 };
 
@@ -82,10 +96,19 @@ const STRUCTURED_DATA = {
   },
 };
 
+const DIRECTION_CONTRACT = "<!-- THESIS: A ledger of 65 findings and what checking each one found, refusing the card deck this category ships -- rows are compared, not admired, and a border around each one is a border between the reader and the comparison. OWN-WORLD: White ground, system sans with tabular figures, mono for paths and line numbers only, one slate-blue accent, verdict colour that never carries meaning alone; rules divide and nothing encloses. STORY: A researcher reads what the checking established before the model's own summary, compares four separate claims down a column, and leaves able to cite the paper. FIRST VIEWPORT: Nav rule, heading, what it does in three lines, the recorded-not-live notice with a link straight to the review; the run form is a disclosure, because this deployment starts nothing. FORM: Category standard executed straight; candidate 4 of 7 on the grounded list, taken as the standing exit. Seed da9de08a. FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, DESIGN.md, and every shipping raster carrying its provenance. -->";
+
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en">
       <body>
+                {/* The direction this page commits to, in the emitted markup so it can
+            be audited against what shipped. A JSX comment never reaches the
+            output; this does. */}
+        <div
+          suppressHydrationWarning
+          dangerouslySetInnerHTML={{ __html: DIRECTION_CONTRACT }}
+        />
         <script
           type="application/ld+json"
           // The payload is a literal in this file, not user or model input.

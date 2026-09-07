@@ -1,7 +1,10 @@
 import React from "react";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 
-import { ReviewDashboard } from "../components/review-dashboard";
+import type { Metadata } from "next";
+import { ReviewDashboard, sourceLink } from "../components/review-dashboard";
+import { metadata as rootMetadata } from "../app/layout";
+import { generateMetadata as caseMetadata } from "../app/cases/[slug]/page";
 import { demoRuns } from "../demo";
 
 const run = demoRuns[0];
@@ -69,9 +72,16 @@ describe("ReviewDashboard", () => {
     expect(run.checks).toHaveLength(run.result.comments.length);
 
     // Findings without a hand check say so plainly rather than being left bare.
+    // The status appears twice per finding by design -- on the collapsed row,
+    // so it is visible without opening anything, and in the axes inside -- so
+    // these count the axes, which is the one place every finding has exactly
+    // one of. A bare phrase count would pass whichever of the two went missing.
     const unchecked = run.checks.filter((check) => !check.verdict).length;
-    expect(screen.getAllByText("not read by hand")).toHaveLength(unchecked);
-    expect(screen.getAllByText("not established")).toHaveLength(unchecked);
+    expect(screen.getAllByText("not read by hand", { selector: "dd" })).toHaveLength(unchecked);
+    expect(screen.getAllByText("not established", { selector: "dd" })).toHaveLength(unchecked);
+    expect(screen.getAllByText("not read by hand", { selector: ".verdict" })).toHaveLength(
+      unchecked,
+    );
 
     // The hand-checked ones carry their note.
     for (const check of run.checks) {
@@ -163,8 +173,12 @@ describe("what each finding actually claims", () => {
       (check) => check.citation === "code line" && check.verdict === "false-positive",
     );
     expect(citesCodeButWrong.length).toBeGreaterThan(0);
-    expect(screen.getAllByText("not in the code").length).toBe(
-      run.checks.filter((check) => check.verdict === "false-positive").length,
+    const falsePositives = run.checks.filter(
+      (check) => check.verdict === "false-positive",
+    ).length;
+    expect(screen.getAllByText("not in the code", { selector: "dd" }).length).toBe(falsePositives);
+    expect(screen.getAllByText("not in the code", { selector: ".verdict" }).length).toBe(
+      falsePositives,
     );
   });
 });
@@ -226,7 +240,11 @@ describe("citation", () => {
     render(<ReviewDashboard />);
 
     // Clipboard access can be refused, so the entry has to be selectable too.
-    expect(screen.getByText(/@misc\{zhang2026reporeviewer/)).toBeInTheDocument();
+    // It sits behind a labelled disclosure rather than printing 11 lines of
+    // BibTeX at every reader, which is one click and no clipboard.
+    const entry = screen.getByText(/@misc\{zhang2026reporeviewer/);
+    expect(entry).toBeInTheDocument();
+    expect(entry.closest("details")?.querySelector("summary")?.textContent).toMatch(/BibTeX/i);
     expect(screen.getByRole("button", { name: /copy bibtex/i })).toBeInTheDocument();
   });
 
@@ -251,5 +269,67 @@ describe("case artifacts", () => {
     expect(`https://github.com/${run.label}/blob/${commit}/src/requests/cookies.py#L110`).toContain(
       commit,
     );
+  });
+});
+
+describe("linking a finding into the code it points at", () => {
+  // This was hardcoded to psf/requests at the recorded run's commit, so a
+  // live review of any other repository sent every "view source" into
+  // requests, at a commit with no relationship to what was reviewed.
+  it("points at the repository that was actually reviewed", () => {
+    expect(sourceLink("https://github.com/owner/thing", "abc123", "src/a.py", 7)).toBe(
+      "https://github.com/owner/thing/blob/abc123/src/a.py#L7",
+    );
+    expect(sourceLink("https://github.com/owner/thing.git", "abc123", "src/a.py", null)).toBe(
+      "https://github.com/owner/thing/blob/abc123/src/a.py",
+    );
+    expect(sourceLink("https://github.com/owner/thing", "abc123", "src/a.py", 7)).not.toContain(
+      "psf/requests",
+    );
+  });
+
+  // A line number means nothing without the commit it was computed against,
+  // so with no commit there is no link rather than a plausible wrong one.
+  it("offers no link when it cannot make a true one", () => {
+    expect(sourceLink("https://github.com/owner/thing", undefined, "a.py", 1)).toBeNull();
+    expect(sourceLink("", "abc123", "a.py", 1)).toBeNull();
+    expect(sourceLink("https://gitlab.com/owner/thing", "abc123", "a.py", 1)).toBeNull();
+    expect(sourceLink("not a url", "abc123", "a.py", 1)).toBeNull();
+  });
+
+  it("links the recorded review at its own repository and commit", () => {
+    render(<ReviewDashboard />);
+
+    const links = screen.getAllByRole("link", { name: /view source/i });
+    expect(links.length).toBeGreaterThan(0);
+    for (const link of links) {
+      expect(link.getAttribute("href")).toContain(`/blob/${run.commit}/`);
+      expect(link.getAttribute("href")).toContain(run.result.repo_url.replace(/^https:\/\//, ""));
+    }
+  });
+});
+
+describe("what a shared link previews as", () => {
+  // Every page declared card: "summary_large_image" and none carried an
+  // image, which renders as an empty box. The sub-pages were worse: a page's
+  // own openGraph replaces the root one wholesale rather than merging, so the
+  // citable permalinks dropped the card the root layout had.
+  it("never promises a large card without an image", async () => {
+    const pages: { name: string; meta: Metadata }[] = [
+      { name: "home", meta: rootMetadata },
+      {
+        name: "case permalink",
+        meta: await caseMetadata({ params: Promise.resolve({ slug: run.slug }) }),
+      },
+    ];
+
+    for (const { name, meta } of pages) {
+      const card = (meta.twitter as { card?: string } | undefined)?.card;
+      if (card !== "summary_large_image") continue;
+      const og = (meta.openGraph as { images?: unknown[] } | undefined)?.images ?? [];
+      const tw = (meta.twitter as { images?: unknown[] } | undefined)?.images ?? [];
+      expect(og.length, `${name} og:image`).toBeGreaterThan(0);
+      expect(tw.length, `${name} twitter:image`).toBeGreaterThan(0);
+    }
   });
 });

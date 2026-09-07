@@ -36,7 +36,7 @@ export function mixedContentWarning(base: string): string | null {
 }
 
 const hintStyle = {
-  color: "var(--muted)",
+  color: "var(--ink-2)",
   fontSize: "0.85rem",
   lineHeight: 1.5,
   margin: "6px 0 0",
@@ -49,11 +49,58 @@ const VERDICT_LABELS: Record<Verdict, string> = {
   unverified: "Checked: could not settle",
 };
 
+// The commit the recorded review ran against, so a row can link to the code
+// the reviewer actually saw rather than to a branch that has moved since.
+/**
+ * A link into the code a finding points at, or null.
+ *
+ * This was hardcoded to psf/requests at the recorded run's commit, which is
+ * right for the recording and wrong for every live review: a run against any
+ * other repository sent "view source" into requests at a commit that has
+ * nothing to do with it.
+ *
+ * Returns null rather than guessing. A line number means nothing without the
+ * commit it was computed against, so with no commit there is no link -- the
+ * same reason the checking refuses to claim a position it cannot support.
+ * Only github.com is linkable; other hosts do not share the blob URL shape.
+ */
+export function sourceLink(
+  repoUrl: string,
+  commit: string | undefined,
+  file: string,
+  line: number | null,
+): string | null {
+  if (!commit || !repoUrl) return null;
+  let path: string;
+  try {
+    const url = new URL(repoUrl);
+    if (url.hostname !== "github.com") return null;
+    path = url.pathname.replace(/\.git$/, "").replace(/^\/+|\/+$/g, "");
+  } catch {
+    return null;
+  }
+  if (!path) return null;
+  return `https://github.com/${path}/blob/${commit}/${file}${line ? `#L${line}` : ""}`;
+}
+
 const VERDICT_SHORT: Record<Verdict, string> = {
   accurate: "in the code, at the line cited",
   misplaced: "in the code, at a different line",
   "false-positive": "not in the code",
   unverified: "could not be settled",
+};
+
+/*
+  The same verdict at three lengths, because a number in a strip, a chip on a
+  row, and a claim inside a finding are read at three different speeds. The
+  glance label never stands alone: the strip sits directly above the findings
+  that carry the full wording.
+*/
+const VERDICT_GLANCE: Record<Verdict, string> = {
+  accurate: "accurate",
+  misplaced: "wrong line",
+  "false-positive": "not in the code",
+  unverified: "unsettled",
 };
 
 const CITATION_LABELS: Record<Citation, string> = {
@@ -64,11 +111,12 @@ const CITATION_LABELS: Record<Citation, string> = {
   "no line number": "no line number",
 };
 
+// Colour is never the only carrier: every verdict is spelled out beside it.
 const VERDICT_COLORS: Record<Verdict, { border: string; text: string }> = {
-  accurate: { border: "#2f7d4f", text: "#2f7d4f" },
-  misplaced: { border: "#b8860b", text: "#8a6508" },
-  "false-positive": { border: "#b03a3a", text: "#b03a3a" },
-  unverified: { border: "#7a7a7a", text: "#666" },
+  accurate: { border: "var(--ok)", text: "var(--ok)" },
+  misplaced: { border: "var(--warn)", text: "var(--warn)" },
+  "false-positive": { border: "var(--bad)", text: "var(--bad)" },
+  unverified: { border: "var(--ink-3)", text: "var(--ink-3)" },
 };
 
 const severityOrder: Severity[] = ["high", "medium", "low"];
@@ -156,55 +204,34 @@ export function ReviewDashboard() {
   }
 
   return (
-    <main style={{ padding: "32px 20px 60px" }}>
-      <div style={{ maxWidth: 1200, margin: "0 auto" }}>
-        <section
-          style={{
-            background: "var(--panel)",
-            border: "1px solid var(--border)",
-            borderRadius: "var(--radius)",
-            boxShadow: "var(--shadow)",
-            padding: 28,
-            backdropFilter: "blur(14px)",
-          }}
-        >
-          <nav
-            aria-label="Primary"
-            style={{
-              display: "flex",
-              gap: 18,
-              flexWrap: "wrap",
-              justifyContent: "space-between",
-              alignItems: "baseline",
-            }}
-          >
-            <p
-              style={{
-                letterSpacing: "0.18em",
-                textTransform: "uppercase",
-                color: "var(--accent)",
-                margin: 0,
-              }}
-            >
-              RepoReviewer
-            </p>
-            <span style={{ display: "flex", gap: 18, flexWrap: "wrap" }}>
-              <a href="https://arxiv.org/abs/2603.16107">Paper</a>
-              <a href="https://github.com/peng1z/RepoReviewer">Code</a>
-              <a href="#recorded-review">Example</a>
-              <a href="#cite">Cite</a>
-            </span>
+    <main style={{ padding: "0 20px 80px", overflowX: "hidden" }}>
+      {/* Full width, so it reads as the chrome of a tool rather than a strip
+          inside the document. The reading page opposite has no bar at all. */}
+      <div className="topbar">
+        <div className="topbar-inner">
+          <span className="wordmark">RepoReviewer</span>
+          <nav aria-label="Primary">
+            <a href="https://arxiv.org/abs/2603.16107">paper</a>
+            <a href="https://github.com/peng1z/RepoReviewer">code</a>
+            <a href="#recorded-review">example</a>
+            <a href="#cite">cite</a>
           </nav>
-          <h1 style={{ margin: "12px 0 10px", fontSize: "clamp(2.2rem, 5vw, 4.2rem)" }}>
+        </div>
+      </div>
+      <div style={{ maxWidth: 860, margin: "0 auto", minWidth: 0 }}>
+        <section
+          style={{}}>
+          {/* No eyebrow above the heading: the heading carries its own weight. */}
+          <h1 style={{ margin: "32px 0 14px" }}>
             Multi-agent code review for GitHub repositories
           </h1>
-          <p style={{ color: "var(--muted)", maxWidth: 760, fontSize: "1.08rem", lineHeight: 1.6 }}>
+          <p style={{ color: "var(--ink-2)", marginTop: 14 }}>
             Give it a repository or pull request. It clones the repo, builds project context,
             reviews files one at a time, ranks what it found, and writes a summary, streaming each
             agent step and ending in a JSON and Markdown report.
           </p>
-          <p style={{ color: "var(--muted)", maxWidth: 760, fontSize: "1.08rem", lineHeight: 1.6 }}>
-            <strong style={{ color: "var(--text)" }}>
+          <p style={{ color: "var(--ink-2)", marginTop: 14 }}>
+            <strong style={{ color: "var(--ink)" }}>
               You are reading a recorded review, not a live one.
             </strong>{" "}
             {apiBase
@@ -308,7 +335,7 @@ export function ReviewDashboard() {
                   checked={form.include_tests}
                   onChange={(event) => setForm({ ...form, include_tests: event.target.checked })}
                 />
-                <span style={{ color: "var(--muted)" }}>Include test files</span>
+                <span style={{ color: "var(--ink-2)" }}>Include test files</span>
               </label>
             </div>
 
@@ -324,27 +351,29 @@ export function ReviewDashboard() {
             </button>
           </form>
           </details>
-          {error ? <p style={{ color: "var(--high)" }}>{error}</p> : null}
+          {error ? <p style={{ color: "var(--bad)" }}>{error}</p> : null}
         </section>
 
-        <section style={{ ...sectionStyle, marginTop: 24 }}>
+        {jobId || events.length > 0 ? (
+        <section style={sectionStyle}>
           <div style={sectionHeaderStyle}>
             <h2 style={{ margin: 0 }}>Live Agent Progress</h2>
-            <span style={{ color: "var(--muted)" }}>{jobId ?? "No active job"}</span>
+            <span style={{ color: "var(--ink-2)" }}>{jobId ?? "No active job"}</span>
           </div>
           <div style={{ display: "grid", gap: 10 }}>
-            {events.length === 0 ? <p style={{ color: "var(--muted)" }}>Run a review to stream agent updates.</p> : null}
+            {events.length === 0 ? <p style={{ color: "var(--ink-2)" }}>Waiting for the first agent event.</p> : null}
             {events.map((entry, index) => (
               <article key={`${entry.stage}-${index}`} style={progressCardStyle}>
                 <div style={{ display: "flex", justifyContent: "space-between", gap: 16 }}>
                   <strong>{entry.stage}</strong>
                   <span>{entry.percent}%</span>
                 </div>
-                <p style={{ margin: "8px 0 0", color: "var(--muted)" }}>{entry.message}</p>
+                <p style={{ margin: "8px 0 0", color: "var(--ink-2)" }}>{entry.message}</p>
               </article>
             ))}
           </div>
         </section>
+        ) : null}
 
         {demo ? <VerificationPanel run={demo} /> : null}
 
@@ -352,7 +381,13 @@ export function ReviewDashboard() {
           <ResultPanel result={job.result} jobId={job.id} apiBase={apiBase} />
         ) : null}
         {demo ? (
-          <ResultPanel result={demo.result} jobId={demo.slug} apiBase="" checks={demo.checks} />
+          <ResultPanel
+            result={demo.result}
+            jobId={demo.slug}
+            apiBase=""
+            checks={demo.checks}
+            commit={demo.commit}
+          />
         ) : null}
 
         <Citation />
@@ -373,53 +408,75 @@ function VerificationPanel({ run }: { run: DemoRun }) {
   const checkedCount = run.checks.filter((check) => check.verdict).length;
 
   return (
-    <section id="recorded-review" style={{ ...sectionStyle, marginTop: 24 }}>
+    <section id="recorded-review" style={sectionStyle}>
       <h2 style={{ margin: 0 }}>Recorded review, checked against the code</h2>
-      <p style={{ color: "var(--muted)", lineHeight: 1.6, marginTop: 12 }}>
+      <p style={{ color: "var(--ink-2)", lineHeight: 1.6, marginTop: 12 }}>
         A real run against{" "}
         <a href={`https://github.com/${run.label}/tree/${run.commit}`}>{run.label}</a> at{" "}
         <code>{run.commit.slice(0, 7)}</code>, finishing in {run.elapsedSeconds}s. Nothing in the
-        output was edited. Publishing a model&apos;s claims about someone else&apos;s project
-        without checking them would mean asserting defects that may not exist, so both halves of
-        the check ship with it.
+        output was edited, and every finding carries what was checked about it.
       </p>
 
-      <h3 style={{ marginBottom: 4 }}>Where the line numbers point</h3>
-      <p style={{ color: "var(--muted)", margin: "0 0 12px", lineHeight: 1.6 }}>
-        Mechanical, so it covers all {run.checks.length} findings and anyone can redo it from the
-        commit above.
-      </p>
-      <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-        {[...citations.entries()]
-          .sort((a, b) => b[1] - a[1])
-          .map(([citation, count]) => (
-            <span key={citation} style={pillStyle(citation === "code line" ? "#2f7d4f" : "#8a6508")}>
-              {CITATION_LABELS[citation]} <strong>{count}</strong>
-            </span>
-          ))}
-      </div>
-
-      <h3 style={{ margin: "22px 0 4px" }}>Whether the problem is really there</h3>
-      <p style={{ color: "var(--muted)", margin: "0 0 12px", lineHeight: 1.6 }}>
-        This needs judgement, so it was done by hand and only for the {checkedCount}{" "}
-        high-severity findings. The other {run.checks.length - checkedCount} carry the positional
-        check alone and are not claimed to be right or wrong.
-      </p>
-      <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+      {/* The numbers first. A reader deciding whether to spend time here is
+          asking what it found and how much of that survived checking, and
+          that answer was previously four paragraphs down. */}
+      <div className="glance">
+        <div className="glance-item">
+          <div className="glance-value">{run.checks.length}</div>
+          <div className="glance-label">findings</div>
+        </div>
+        <div className="glance-item">
+          <div className="glance-value">{checkedCount}</div>
+          <div className="glance-label">read by hand</div>
+        </div>
         {[...verdicts.entries()].map(([verdict, count]) => (
-          <span key={verdict} style={pillStyle(VERDICT_COLORS[verdict].border)}>
-            {VERDICT_LABELS[verdict]} <strong>{count}</strong>
-          </span>
+          <div className="glance-item" key={verdict}>
+            <div className="glance-value" style={{ color: VERDICT_COLORS[verdict].text }}>
+              {count}
+            </div>
+            <div className="glance-label">{VERDICT_GLANCE[verdict]}</div>
+          </div>
         ))}
       </div>
 
-      <p style={{ color: "var(--muted)", lineHeight: 1.6, marginTop: 18 }}>
-        The bottleneck is placing an issue, not finding one. A citation that sends a reviewer to
-        unrelated code costs more trust than the observation earns. Positions that cannot hold a
-        finding -- past the end of a file, or blank -- are now cleared automatically and the
-        finding reported without one; that is a floor, not a fix, because a line can be wrong
-        while still containing code.
-      </p>
+      <details style={{ marginTop: 22 }}>
+        <summary style={{ cursor: "pointer", fontWeight: 600 }}>
+          How the two checks were done, and what they do not establish
+        </summary>
+
+        <h3 style={{ marginBottom: 4 }}>Where the line numbers point</h3>
+        <p style={{ color: "var(--ink-2)", margin: "0 0 12px", lineHeight: 1.6 }}>
+          Mechanical, so it covers all {run.checks.length} findings and anyone can redo it from
+          the commit above.
+        </p>
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+          {[...citations.entries()]
+            .sort((a, b) => b[1] - a[1])
+            .map(([citation, count]) => (
+              <span
+                key={citation}
+                style={pillStyle(citation === "code line" ? "var(--ok)" : "var(--warn)")}
+              >
+                {CITATION_LABELS[citation]} <strong>{count}</strong>
+              </span>
+            ))}
+        </div>
+
+        <h3 style={{ margin: "22px 0 4px" }}>Whether the problem is really there</h3>
+        <p style={{ color: "var(--ink-2)", margin: "0 0 12px", lineHeight: 1.6 }}>
+          This needs judgement, so it was done by hand and only for the {checkedCount}{" "}
+          high-severity findings. The other {run.checks.length - checkedCount} carry the
+          positional check alone and are not claimed to be right or wrong.
+        </p>
+
+        <p style={{ color: "var(--ink-2)", lineHeight: 1.6, marginTop: 18 }}>
+          The bottleneck is placing an issue, not finding one. A citation that sends a reviewer
+          to unrelated code costs more trust than the observation earns. Positions that cannot
+          hold a finding -- past the end of a file, or blank -- are now cleared automatically and
+          the finding reported without one; that is a floor, not a fix, because a line can be
+          wrong while still containing code.
+        </p>
+      </details>
     </section>
   );
 }
@@ -466,34 +523,38 @@ function CheckAxes({ comment, check }: { comment: ReviewComment; check: FindingC
   ];
 
   return (
-    <div
-      style={{
-        border: `1px solid ${check.verdict ? VERDICT_COLORS[check.verdict].border : "#c9c4bb"}`,
-        borderRadius: 12,
-        padding: "10px 12px",
-        margin: "10px 0 12px",
-      }}
-    >
+    <div style={{ margin: "12px 0 16px" }}>
       <dl
         style={{
           display: "grid",
-          gridTemplateColumns: "auto 1fr",
-          gap: "4px 12px",
+          gridTemplateColumns: "max-content 1fr",
+          columnGap: 18,
+          rowGap: 2,
           margin: 0,
-          fontSize: "0.88rem",
+          fontSize: "0.9rem",
         }}
       >
         {rows.map((row) => (
           <Fragment key={row.label}>
-            <dt style={{ color: "var(--muted)" }}>{row.label}</dt>
-            <dd style={{ margin: 0, color: row.color ?? "inherit", fontWeight: 600 }}>
+            <dt style={{ color: "var(--ink-3)" }}>{row.label}</dt>
+            <dd style={{ margin: 0, color: row.color ?? "var(--ink)", fontWeight: 550 }}>
               {row.value}
             </dd>
           </Fragment>
         ))}
       </dl>
       {check.note ? (
-        <p style={{ margin: "8px 0 0", color: "var(--muted)", lineHeight: 1.5 }}>{check.note}</p>
+        <p
+          style={{
+            margin: "10px 0 0",
+            paddingLeft: 14,
+            borderLeft: "1px solid var(--rule-strong)",
+            color: "var(--ink-2)",
+            fontSize: "0.92rem",
+          }}
+        >
+          {check.note}
+        </p>
       ) : null}
     </div>
   );
@@ -519,14 +580,14 @@ function CheckedSummary({
   return (
     <div
       style={{
-        border: "1px solid var(--border)",
-        borderRadius: 18,
-        padding: 18,
+        borderLeft: "3px solid var(--accent)",
+        background: "var(--paper-2)",
+        padding: "16px 18px",
         marginBottom: 16,
       }}
     >
       <h3 style={{ margin: 0 }}>What the checking found</h3>
-      <p style={{ color: "var(--muted)", lineHeight: 1.6, margin: "10px 0 0" }}>
+      <p style={{ color: "var(--ink-2)", lineHeight: 1.6, margin: "10px 0 0" }}>
         Of {result.comments.length} findings, {handChecked.length} high-severity ones were read
         against the source at the reviewed commit. {tally.accurate ?? 0} described a real problem
         at the line cited, {tally.misplaced ?? 0} described a real problem at the wrong line, and{" "}
@@ -547,7 +608,7 @@ function CheckedSummary({
           </ul>
         </>
       ) : null}
-      <p style={{ color: "var(--muted)", lineHeight: 1.6, margin: "14px 0 0" }}>
+      <p style={{ color: "var(--ink-2)", lineHeight: 1.6, margin: "14px 0 0" }}>
         This is one review of one repository. It does not measure the system's accuracy, and the
         by-hand verdicts are themselves claims about the code, each with its evidence on the
         finding it belongs to.
@@ -561,18 +622,21 @@ function ResultPanel({
   jobId,
   apiBase,
   checks,
+  commit,
 }: {
   result: ReviewResult;
   jobId: string;
   apiBase: string;
   checks?: FindingCheck[];
+  /** The commit reviewed. Absent for a live run, which carries no sha. */
+  commit?: string;
 }) {
   return (
-    <section style={{ ...sectionStyle, marginTop: 24 }}>
+    <section style={sectionStyle}>
       <div style={sectionHeaderStyle}>
         <div>
           <h2 style={{ margin: 0 }}>Final Review</h2>
-          <p style={{ color: "var(--muted)", margin: "8px 0 0" }}>
+          <p style={{ color: "var(--ink-2)", margin: "8px 0 0" }}>
             {result.repo_name} · {result.provider}/{result.model}
           </p>
         </div>
@@ -609,7 +673,7 @@ function ResultPanel({
             so the coverage line -- how much of the repository was actually
             read -- did not reach the reader. */}
         {result.summary.skipped_notes.length > 0 ? (
-          <ul style={{ margin: "14px 0 0", paddingLeft: 20, color: "var(--muted)" }}>
+          <ul style={{ margin: "14px 0 0", paddingLeft: 20, color: "var(--ink-2)" }}>
             {result.summary.skipped_notes.map((note) => (
               <li key={note}>{note}</li>
             ))}
@@ -624,38 +688,84 @@ function ResultPanel({
           .map((comment, index) => ({ comment, check: checks?.[index] }))
           .filter((entry) => entry.comment.severity === severity);
         return (
-          <div key={severity} style={{ marginTop: 24 }}>
-            <h3 style={{ textTransform: "capitalize" }}>{severity}</h3>
-            <div style={{ display: "grid", gap: 14 }}>
-              {items.length === 0 ? <p style={{ color: "var(--muted)" }}>No {severity} findings.</p> : null}
+          <details key={severity} style={{ marginTop: 26 }} open={severity === "high"}>
+            <summary className="group-summary">
+              <span style={{ textTransform: "capitalize" }}>{severity}</span>
+              <span className="group-count">
+                {items.length} {items.length === 1 ? "finding" : "findings"}
+              </span>
+            </summary>
+            <div>
+              {items.length === 0 ? (
+                <p style={{ color: "var(--ink-2)", marginTop: 12 }}>No {severity} findings.</p>
+              ) : null}
               {items.map(({ comment, check }) => (
-                <article key={`${comment.file}-${comment.line}-${comment.issue}`} style={findingCardStyle(severity)}>
-                  <div style={{ display: "flex", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
-                    <strong>
-                      {comment.file}
-                      {comment.line ? `:${comment.line}` : ""}
-                    </strong>
-                    <span style={{ textTransform: "uppercase", letterSpacing: "0.1em" }}>{comment.severity}</span>
+                <details
+                  key={`${comment.file}-${comment.line}-${comment.issue}`}
+                  className="finding"
+                >
+                  <summary>
+                    <span
+                      className="sev"
+                      data-sev={comment.severity}
+                      aria-label={`${comment.severity} severity`}
+                    />
+                    <span className="finding-head">
+                      <span className="finding-where">
+                        {comment.file}
+                        {comment.line ? `:${comment.line}` : ""}
+                      </span>
+                      <span className="finding-what">{comment.issue}</span>
+                    </span>
+                    {check ? (
+                      <span
+                        className="verdict"
+                        style={{
+                          color: check.verdict
+                            ? VERDICT_COLORS[check.verdict].text
+                            : "var(--ink-3)",
+                        }}
+                      >
+                        {check.verdict ? VERDICT_SHORT[check.verdict] : "not read by hand"}
+                      </span>
+                    ) : null}
+                  </summary>
+                  <div className="finding-body">
+                    {check ? <CheckAxes comment={comment} check={check} /> : null}
+                    <p style={{ marginBottom: 8 }}>{comment.issue}</p>
+                    <p style={{ marginTop: 0, color: "var(--ink-2)" }}>{comment.suggestion}</p>
+                    {comment.snippet ? (
+                      <pre
+                        style={{
+                          borderTop: "1px solid var(--rule)",
+                          borderBottom: "1px solid var(--rule)",
+                          padding: "12px 0",
+                          overflowX: "auto",
+                        }}
+                      >
+                        {comment.snippet}
+                      </pre>
+                    ) : null}
+                    {(() => {
+                      const href = sourceLink(
+                        result.repo_url,
+                        commit,
+                        comment.file,
+                        comment.line,
+                      );
+                      return href ? (
+                        <p style={{ marginTop: 12 }}>
+                          <a href={href} style={{ fontSize: "0.85rem" }}>
+                            view source
+                          </a>
+                        </p>
+                      ) : null;
+                    })()}
                   </div>
-                  {check ? <CheckAxes comment={comment} check={check} /> : null}
-                  <p style={{ marginBottom: 8 }}>{comment.issue}</p>
-                  <p style={{ marginTop: 0, color: "var(--muted)" }}>{comment.suggestion}</p>
-                  {comment.snippet ? (
-                    <pre
-                      style={{
-                        background: "rgba(15, 76, 117, 0.08)",
-                        borderRadius: 14,
-                        padding: 14,
-                        overflowX: "auto",
-                      }}
-                    >
-                      {comment.snippet}
-                    </pre>
-                  ) : null}
-                </article>
+                </details>
               ))}
             </div>
-          </div>
+          </details>
         );
       })}
 
@@ -702,9 +812,9 @@ function Citation() {
   }
 
   return (
-    <footer id="cite" style={{ ...sectionStyle, marginTop: 24 }}>
+    <footer id="cite" style={sectionStyle}>
       <h2 style={{ margin: 0, fontSize: "1.1rem" }}>Cite this work</h2>
-      <p style={{ color: "var(--muted)", lineHeight: 1.6, margin: "10px 0 0" }}>
+      <p style={{ color: "var(--ink-2)", lineHeight: 1.6, margin: "10px 0 0" }}>
         This page is the artifact for{" "}
         <a href="https://arxiv.org/abs/2603.16107">
           RepoReviewer: A Local-First Multi-Agent Architecture for Repository-Level Code Review
@@ -712,11 +822,14 @@ function Citation() {
         , Peng Zhang. arXiv:2603.16107, version 1 preprint, 17 March 2026. DOI{" "}
         <a href="https://doi.org/10.48550/arXiv.2603.16107">10.48550/arXiv.2603.16107</a>.
       </p>
-      <p style={{ color: "var(--muted)", lineHeight: 1.6, margin: "10px 0 0" }}>
-        The recording below was produced by the software at a later commit than the paper
-        describes; where the two differ, the code and the recorded run are the account of what
-        this build does, and the paper is the account of what version 1 reported.
-      </p>
+      <details className="drawer">
+        <summary>Where the paper and this build differ</summary>
+        <p className="drawer-body" style={{ color: "var(--ink-2)", lineHeight: 1.6, margin: 0 }}>
+          The recording above was produced by the software at a later commit than the paper
+          describes; where the two differ, the code and the recorded run are the account of what
+          this build does, and the paper is the account of what version 1 reported.
+        </p>
+      </details>
       <div style={{ display: "flex", gap: 12, flexWrap: "wrap", margin: "14px 0 0" }}>
         <a href="https://arxiv.org/abs/2603.16107" style={buttonStyle}>
           Abstract
@@ -737,18 +850,14 @@ function Citation() {
           {copied ? "BibTeX copied" : "Copy BibTeX"}
         </button>
       </div>
-      <pre
-        style={{
-          background: "rgba(15, 76, 117, 0.08)",
-          borderRadius: 14,
-          padding: 14,
-          overflowX: "auto",
-          marginTop: 14,
-          fontSize: "0.82rem",
-        }}
-      >
-        {BIBTEX}
-      </pre>
+      {/* Behind a disclosure, not gone: the clipboard can be refused, so the
+          entry stays selectable one click away rather than only copyable. */}
+      <details className="drawer">
+        <summary>BibTeX</summary>
+        <pre className="drawer-body" style={{ overflowX: "auto", fontSize: "0.82rem" }}>
+          {BIBTEX}
+        </pre>
+      </details>
     </footer>
   );
 }
@@ -777,7 +886,7 @@ function SkippedFiles({ files }: { files: { path: string; reason: string }[] }) 
             <summary style={{ cursor: "pointer" }}>
               <strong>{paths.length}</strong> · {reason}
             </summary>
-            <ul style={{ margin: "10px 0 0", paddingLeft: 20, color: "var(--muted)" }}>
+            <ul style={{ margin: "10px 0 0", paddingLeft: 20, color: "var(--ink-2)" }}>
               {paths.map((path) => (
                 <li key={path}>{path}</li>
               ))}
@@ -799,21 +908,24 @@ function pillStyle(color: string) {
   } as const;
 }
 
+/*
+  A ledger, not a deck of cards. Sections are separated by a rule and space;
+  rows are separated by a rule alone. Nothing is enclosed, because 65 findings
+  in 65 boxes is 65 borders between a reader and a comparison.
+*/
 const sectionStyle = {
-  background: "var(--panel-strong)",
-  border: "1px solid var(--border)",
-  borderRadius: "var(--radius)",
-  boxShadow: "var(--shadow)",
-  padding: 24,
+  borderTop: "1px solid var(--rule)",
+  paddingTop: 28,
+  marginTop: 40,
 };
 
 const sectionHeaderStyle = {
   display: "flex",
-  alignItems: "center",
+  alignItems: "baseline",
   justifyContent: "space-between",
   gap: 16,
   flexWrap: "wrap" as const,
-  marginBottom: 18,
+  marginBottom: 16,
 };
 
 const gridTwo = {
@@ -823,54 +935,63 @@ const gridTwo = {
 };
 
 const labelStyle = {
-  marginBottom: 8,
-  color: "var(--muted)",
+  marginBottom: 6,
+  color: "var(--ink-2)",
+  fontSize: "0.9rem",
 };
 
 const inputStyle = {
   width: "100%",
-  padding: "14px 16px",
-  borderRadius: 14,
-  border: "1px solid var(--border)",
-  background: "rgba(255,255,255,0.8)",
+  padding: "10px 12px",
+  borderRadius: 4,
+  border: "1px solid var(--rule-strong)",
+  background: "var(--paper)",
 };
 
 const buttonStyle = {
   display: "inline-flex",
   alignItems: "center",
   justifyContent: "center",
-  gap: 10,
-  borderRadius: 999,
-  border: "none",
-  background: "var(--accent)",
-  color: "#fff",
-  padding: "14px 20px",
+  gap: 8,
+  borderRadius: 4,
+  border: "1px solid var(--rule-strong)",
+  background: "var(--paper)",
+  color: "var(--ink)",
+  padding: "9px 14px",
   cursor: "pointer",
-};
+  textDecoration: "none",
+} as const;
+
+const primaryButtonStyle = {
+  ...buttonStyle,
+  background: "var(--accent)",
+  borderColor: "var(--accent)",
+  color: "#fff",
+} as const;
 
 const progressCardStyle = {
-  borderRadius: 16,
-  border: "1px solid var(--border)",
-  padding: 14,
-  background: "rgba(255,255,255,0.6)",
+  borderBottom: "1px solid var(--rule)",
+  padding: "10px 0",
 };
 
 const summaryBoxStyle = {
-  borderRadius: 18,
-  padding: 18,
-  background: "rgba(15, 76, 117, 0.08)",
+  borderLeft: "1px solid var(--rule-strong)",
+  paddingLeft: 16,
+  marginTop: 20,
 };
 
-function findingCardStyle(severity: Severity) {
-  const colors = {
-    high: "rgba(143, 29, 29, 0.14)",
-    medium: "rgba(154, 91, 0, 0.12)",
-    low: "rgba(30, 95, 70, 0.12)",
-  };
+const VERDICT_INK: Record<string, string> = {
+  accurate: "var(--ok)",
+  misplaced: "var(--warn)",
+  "false-positive": "var(--bad)",
+  unverified: "var(--ink-3)",
+};
+
+/** A row in the ledger. Severity is a label in the row, not a fill behind it. */
+function findingRowStyle() {
   return {
-    borderRadius: 18,
-    padding: 18,
-    border: "1px solid var(--border)",
-    background: colors[severity],
+    borderTop: "1px solid var(--rule)",
+    padding: "20px 0",
   };
 }
+

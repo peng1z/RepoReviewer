@@ -6,11 +6,25 @@ import type { Citation, FindingCheck, Verdict } from "../../../demo/types";
 
 const SITE = "https://reporeviewer.peng1z.workers.dev";
 
+const OG_IMAGE = "/opengraph-image.png";
+const OG_ALT =
+  "A dark card headed Multi-agent code review for GitHub repositories, carrying the counts " +
+  "from the recorded review of psf/requests: 65 findings, 8 read by hand, 4 not in the code, " +
+  "1 accurate, 3 at the wrong line.";
+
 const VERDICT_TEXT: Record<Verdict, string> = {
   accurate: "in the code, at the line cited",
   misplaced: "in the code, at a different line",
   "false-positive": "not in the code",
   unverified: "could not be settled",
+};
+
+/* Same three tokens the dashboard uses, so a verdict reads the same on both. */
+const VERDICT_COLOR: Record<Verdict, string> = {
+  accurate: "var(--ok)",
+  misplaced: "var(--warn)",
+  "false-positive": "var(--bad)",
+  unverified: "var(--ink-3)",
 };
 
 const CITATION_TEXT: Record<Citation, string> = {
@@ -45,8 +59,23 @@ export async function generateMetadata({
     // Each case owns its canonical. Pointing it at the paper page would ask a
     // crawler to treat a review and a paper as one document.
     alternates: { canonical: url },
-    openGraph: { type: "article", url, title: run.label, description },
-    twitter: { card: "summary_large_image", title: run.label, description },
+    // The card has to be repeated here: a page's own openGraph replaces the
+    // root one wholesale rather than merging, so these permalinks -- the
+    // citable URLs, the ones most likely to be pasted anywhere -- were
+    // declaring summary_large_image with no image at all.
+    openGraph: {
+      type: "article",
+      url,
+      title: run.label,
+      description,
+      images: [{ url: OG_IMAGE, width: 1200, height: 630, alt: OG_ALT }],
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: run.label,
+      description,
+      images: [{ url: OG_IMAGE, alt: OG_ALT }],
+    },
   };
 }
 
@@ -113,13 +142,11 @@ export default async function CasePage({ params }: { params: Promise<{ slug: str
       </nav>
 
       <header style={{ marginTop: 28 }}>
-        <p style={{ letterSpacing: "0.18em", textTransform: "uppercase", color: "var(--accent)" }}>
-          Recorded review
-        </p>
-        <h1 style={{ margin: "10px 0" }}>
+        {/* No eyebrow above the heading. */}
+        <h1 style={{ margin: "0 0 10px" }}>
           {run.label} at {run.commit.slice(0, 7)}
         </h1>
-        <p style={{ color: "var(--muted)", lineHeight: 1.7 }}>
+        <p style={{ color: "var(--ink-2)", lineHeight: 1.7 }}>
           Captured in {run.elapsedSeconds}s with {result.provider}/{result.model}. Nothing in the
           output was edited. One review of one repository: it shows what the pipeline produced on
           that occasion and measures nothing.
@@ -128,7 +155,7 @@ export default async function CasePage({ params }: { params: Promise<{ slug: str
 
       <section style={{ marginTop: 32 }}>
         <h2>What the checking found</h2>
-        <p style={{ color: "var(--muted)", lineHeight: 1.7 }}>
+        <p style={{ color: "var(--ink-2)", lineHeight: 1.7 }}>
           {result.comments.length} findings. Every one carries a positional check: whether the line
           it cites exists and can hold what it describes. {byHand} high-severity findings were also
           read against the source by hand.
@@ -136,14 +163,14 @@ export default async function CasePage({ params }: { params: Promise<{ slug: str
         <dl style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: "6px 16px" }}>
           {Object.entries(counts).map(([key, count]) => (
             <div key={key} style={{ display: "contents" }}>
-              <dt style={{ color: "var(--muted)" }}>
+              <dt style={{ color: "var(--ink-2)" }}>
                 {key in VERDICT_TEXT ? VERDICT_TEXT[key as Verdict] : key}
               </dt>
               <dd style={{ margin: 0, fontWeight: 600 }}>{count}</dd>
             </div>
           ))}
         </dl>
-        <p style={{ color: "var(--muted)", lineHeight: 1.7 }}>
+        <p style={{ color: "var(--ink-2)", lineHeight: 1.7 }}>
           The hand-checked share is not an accuracy rate for the system, and it cannot be scaled up
           to the findings nobody read.
         </p>
@@ -151,7 +178,7 @@ export default async function CasePage({ params }: { params: Promise<{ slug: str
 
       <section style={{ marginTop: 32 }}>
         <h2>Coverage</h2>
-        <ul style={{ color: "var(--muted)", lineHeight: 1.8 }}>
+        <ul style={{ color: "var(--ink-2)", lineHeight: 1.8 }}>
           <li>Files that produced a finding: {reviewed.size}</li>
           <li>
             Eligible files never opened, because they ranked below the max_files cut:{" "}
@@ -166,7 +193,7 @@ export default async function CasePage({ params }: { params: Promise<{ slug: str
 
       <section style={{ marginTop: 32 }}>
         <h2>Download</h2>
-        <p style={{ color: "var(--muted)", lineHeight: 1.7 }}>
+        <p style={{ color: "var(--ink-2)", lineHeight: 1.7 }}>
           The raw pipeline output, exactly as the run produced it, and the checks applied to it
           afterwards. They are separate files on purpose: the recording is evidence, and folding a
           later annotation into it would make the evidence a claim about itself.
@@ -192,21 +219,36 @@ export default async function CasePage({ params }: { params: Promise<{ slug: str
         {result.comments.map((comment, index) => {
           const check = run.checks[index];
           return (
-            <article
-              key={`${comment.file}-${index}`}
-              style={{
-                border: "1px solid var(--border)",
-                borderRadius: 14,
-                padding: 16,
-                marginTop: 14,
-              }}
-            >
-              <h3 style={{ margin: 0, fontSize: "1rem" }}>
+            <details key={`${comment.file}-${index}`} className="finding">
+              <summary>
+                <span
+                  className="sev"
+                  data-sev={comment.severity}
+                  aria-label={`${comment.severity} severity`}
+                />
+                <span className="finding-head">
+                  <span className="finding-where">
+                    {comment.file}
+                    {comment.line ? `:${comment.line}` : ""}
+                  </span>
+                  <span className="finding-what">{comment.issue}</span>
+                </span>
+                <span
+                  className="verdict"
+                  style={{
+                    color: check.verdict ? VERDICT_COLOR[check.verdict] : "var(--ink-3)",
+                  }}
+                >
+                  {check.verdict ? VERDICT_TEXT[check.verdict] : "not read by hand"}
+                </span>
+              </summary>
+              <div className="finding-body">
+              <p style={{ margin: 0 }}>
                 <a href={sourceLink(comment.file, comment.line)}>
                   {comment.file}
                   {comment.line ? `:${comment.line}` : ""}
                 </a>
-              </h3>
+              </p>
               <dl
                 style={{
                   display: "grid",
@@ -216,32 +258,33 @@ export default async function CasePage({ params }: { params: Promise<{ slug: str
                   fontSize: "0.88rem",
                 }}
               >
-                <dt style={{ color: "var(--muted)" }}>Model severity</dt>
+                <dt style={{ color: "var(--ink-2)" }}>Model severity</dt>
                 <dd style={{ margin: 0 }}>{comment.severity}</dd>
-                <dt style={{ color: "var(--muted)" }}>Line citation</dt>
+                <dt style={{ color: "var(--ink-2)" }}>Line citation</dt>
                 <dd style={{ margin: 0 }}>{CITATION_TEXT[check.citation]}</dd>
-                <dt style={{ color: "var(--muted)" }}>Issue itself</dt>
+                <dt style={{ color: "var(--ink-2)" }}>Issue itself</dt>
                 <dd style={{ margin: 0 }}>
                   {check.verdict ? VERDICT_TEXT[check.verdict] : "not established"}
                 </dd>
-                <dt style={{ color: "var(--muted)" }}>Check status</dt>
+                <dt style={{ color: "var(--ink-2)" }}>Check status</dt>
                 <dd style={{ margin: 0 }}>
                   {check.verdict ? "read against the source by hand" : "not read by hand"}
                 </dd>
               </dl>
               {check.note ? (
-                <p style={{ color: "var(--muted)", lineHeight: 1.6 }}>{check.note}</p>
+                <p style={{ color: "var(--ink-2)", lineHeight: 1.6 }}>{check.note}</p>
               ) : null}
               <p style={{ lineHeight: 1.6 }}>{comment.issue}</p>
-              <p style={{ color: "var(--muted)", lineHeight: 1.6 }}>{comment.suggestion}</p>
-            </article>
+              <p style={{ color: "var(--ink-2)", lineHeight: 1.6 }}>{comment.suggestion}</p>
+              </div>
+            </details>
           );
         })}
       </section>
 
       <footer style={{ marginTop: 40 }}>
         <h2>Cite the method</h2>
-        <p style={{ color: "var(--muted)", lineHeight: 1.7 }}>
+        <p style={{ color: "var(--ink-2)", lineHeight: 1.7 }}>
           Produced with RepoReviewer:{" "}
           <a href="https://arxiv.org/abs/2603.16107">
             RepoReviewer: A Local-First Multi-Agent Architecture for Repository-Level Code Review
