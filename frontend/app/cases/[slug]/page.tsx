@@ -6,6 +6,12 @@ import type { Citation, FindingCheck, Verdict } from "../../../demo/types";
 
 const SITE = "https://reporeviewer.peng1z.workers.dev";
 
+const OG_IMAGE = "/opengraph-image.png";
+const OG_ALT =
+  "A dark card headed Multi-agent code review for GitHub repositories, carrying the counts " +
+  "from the recorded review of psf/requests: 65 findings, 8 read by hand, 4 not in the code, " +
+  "1 accurate, 3 at the wrong line.";
+
 const VERDICT_TEXT: Record<Verdict, string> = {
   accurate: "in the code, at the line cited",
   misplaced: "in the code, at a different line",
@@ -53,8 +59,23 @@ export async function generateMetadata({
     // Each case owns its canonical. Pointing it at the paper page would ask a
     // crawler to treat a review and a paper as one document.
     alternates: { canonical: url },
-    openGraph: { type: "article", url, title: run.label, description },
-    twitter: { card: "summary_large_image", title: run.label, description },
+    // The card has to be repeated here: a page's own openGraph replaces the
+    // root one wholesale rather than merging, so these permalinks -- the
+    // citable URLs, the ones most likely to be pasted anywhere -- were
+    // declaring summary_large_image with no image at all.
+    openGraph: {
+      type: "article",
+      url,
+      title: run.label,
+      description,
+      images: [{ url: OG_IMAGE, width: 1200, height: 630, alt: OG_ALT }],
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: run.label,
+      description,
+      images: [{ url: OG_IMAGE, alt: OG_ALT }],
+    },
   };
 }
 

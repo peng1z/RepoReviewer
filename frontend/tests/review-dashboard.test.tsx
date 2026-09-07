@@ -1,7 +1,10 @@
 import React from "react";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 
+import type { Metadata } from "next";
 import { ReviewDashboard, sourceLink } from "../components/review-dashboard";
+import { metadata as rootMetadata } from "../app/layout";
+import { generateMetadata as caseMetadata } from "../app/cases/[slug]/page";
 import { demoRuns } from "../demo";
 
 const run = demoRuns[0];
@@ -302,6 +305,31 @@ describe("linking a finding into the code it points at", () => {
     for (const link of links) {
       expect(link.getAttribute("href")).toContain(`/blob/${run.commit}/`);
       expect(link.getAttribute("href")).toContain(run.result.repo_url.replace(/^https:\/\//, ""));
+    }
+  });
+});
+
+describe("what a shared link previews as", () => {
+  // Every page declared card: "summary_large_image" and none carried an
+  // image, which renders as an empty box. The sub-pages were worse: a page's
+  // own openGraph replaces the root one wholesale rather than merging, so the
+  // citable permalinks dropped the card the root layout had.
+  it("never promises a large card without an image", async () => {
+    const pages: { name: string; meta: Metadata }[] = [
+      { name: "home", meta: rootMetadata },
+      {
+        name: "case permalink",
+        meta: await caseMetadata({ params: Promise.resolve({ slug: run.slug }) }),
+      },
+    ];
+
+    for (const { name, meta } of pages) {
+      const card = (meta.twitter as { card?: string } | undefined)?.card;
+      if (card !== "summary_large_image") continue;
+      const og = (meta.openGraph as { images?: unknown[] } | undefined)?.images ?? [];
+      const tw = (meta.twitter as { images?: unknown[] } | undefined)?.images ?? [];
+      expect(og.length, `${name} og:image`).toBeGreaterThan(0);
+      expect(tw.length, `${name} twitter:image`).toBeGreaterThan(0);
     }
   });
 });

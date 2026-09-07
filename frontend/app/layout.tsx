@@ -10,6 +10,13 @@ const DESCRIPTION =
   "against the code: 65 findings, a positional check on all of them, and a " +
   "by-hand check of the 8 high-severity ones. Artifact for arXiv:2603.16107.";
 
+/* The share card. Relative, so metadataBase makes it absolute. */
+const OG_IMAGE = "/opengraph-image.png";
+const OG_ALT =
+  "A dark card headed Multi-agent code review for GitHub repositories, carrying the counts " +
+  "from the recorded review of psf/requests: 65 findings, 8 read by hand, 4 not in the code, " +
+  "1 accurate, 3 at the wrong line.";
+
 export const metadata: Metadata = {
   metadataBase: new URL(SITE),
   title: "RepoReviewer — a checked multi-agent code review of psf/requests",
@@ -31,11 +38,18 @@ export const metadata: Metadata = {
     siteName: "RepoReviewer",
     title: "RepoReviewer — a checked multi-agent code review of psf/requests",
     description: DESCRIPTION,
+    // The card lives in public/ rather than as app/opengraph-image.png. The
+    // file convention wins over an explicit openGraph.images and drops its
+    // alt with it, so the convention costs the alt text; declaring the whole
+    // thing here keeps both. (opengraph-image.alt.txt is accepted as a file
+    // on Next 15.5 and emits nothing at all.)
+    images: [{ url: OG_IMAGE, width: 1200, height: 630, alt: OG_ALT }],
   },
   twitter: {
     card: "summary_large_image",
     title: "RepoReviewer — a checked multi-agent code review of psf/requests",
     description: DESCRIPTION,
+    images: [{ url: OG_IMAGE, alt: OG_ALT }],
   },
 };
 
