@@ -209,7 +209,7 @@ export function ReviewDashboard() {
           inside the document. The reading page opposite has no bar at all. */}
       <div className="topbar">
         <div className="topbar-inner">
-          <span className="wordmark">repo-reviewer</span>
+          <span className="wordmark">RepoReviewer</span>
           <nav aria-label="Primary">
             <a href="https://arxiv.org/abs/2603.16107">paper</a>
             <a href="https://github.com/peng1z/RepoReviewer">code</a>

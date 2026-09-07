@@ -404,15 +404,18 @@ details[open] > .group-summary::before {
 
 .wordmark {
   font-family: var(--mono);
-  font-size: 0.9rem;
+  font-size: 0.92rem;
   font-weight: 500;
   letter-spacing: 0.01em;
+  color: #fff;
 }
 
-.wordmark::before {
-  content: "$ ";
-  color: #7fb2e5;
-}
+/*
+  No shell prompt in front of the name. It was there to say "this is a
+  tool", but the owner of the project read the "$" as a stray glyph and
+  the kebab-case name as a typo. A signature that has to be explained is
+  not doing the job; the dark bar and the monospace already say it.
+*/
 
 .topbar nav {
   display: flex;
