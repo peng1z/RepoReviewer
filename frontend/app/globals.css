@@ -289,6 +289,25 @@ summary::marker {
   white-space: nowrap;
 }
 
+/*
+  On a phone the verdict and the path were competing for one line and the
+  verdict won: "in the code, at a different line" is 267px of a 390px
+  viewport, which left 42px for the file path and rendered it as "sr...".
+  The path is what a reader scans; the verdict drops to its own line rather
+  than eating the row.
+*/
+@media (max-width: 34rem) {
+  .finding > summary {
+    grid-template-columns: auto minmax(0, 1fr);
+    row-gap: 6px;
+  }
+
+  .finding > summary > .verdict {
+    grid-column: 2;
+    justify-self: start;
+  }
+}
+
 .finding-body {
   padding: 4px 0 22px;
 }
