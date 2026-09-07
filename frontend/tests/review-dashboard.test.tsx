@@ -1,7 +1,7 @@
 import React from "react";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 
-import { ReviewDashboard } from "../components/review-dashboard";
+import { ReviewDashboard, sourceLink } from "../components/review-dashboard";
 import { demoRuns } from "../demo";
 
 const run = demoRuns[0];
@@ -266,5 +266,42 @@ describe("case artifacts", () => {
     expect(`https://github.com/${run.label}/blob/${commit}/src/requests/cookies.py#L110`).toContain(
       commit,
     );
+  });
+});
+
+describe("linking a finding into the code it points at", () => {
+  // This was hardcoded to psf/requests at the recorded run's commit, so a
+  // live review of any other repository sent every "view source" into
+  // requests, at a commit with no relationship to what was reviewed.
+  it("points at the repository that was actually reviewed", () => {
+    expect(sourceLink("https://github.com/owner/thing", "abc123", "src/a.py", 7)).toBe(
+      "https://github.com/owner/thing/blob/abc123/src/a.py#L7",
+    );
+    expect(sourceLink("https://github.com/owner/thing.git", "abc123", "src/a.py", null)).toBe(
+      "https://github.com/owner/thing/blob/abc123/src/a.py",
+    );
+    expect(sourceLink("https://github.com/owner/thing", "abc123", "src/a.py", 7)).not.toContain(
+      "psf/requests",
+    );
+  });
+
+  // A line number means nothing without the commit it was computed against,
+  // so with no commit there is no link rather than a plausible wrong one.
+  it("offers no link when it cannot make a true one", () => {
+    expect(sourceLink("https://github.com/owner/thing", undefined, "a.py", 1)).toBeNull();
+    expect(sourceLink("", "abc123", "a.py", 1)).toBeNull();
+    expect(sourceLink("https://gitlab.com/owner/thing", "abc123", "a.py", 1)).toBeNull();
+    expect(sourceLink("not a url", "abc123", "a.py", 1)).toBeNull();
+  });
+
+  it("links the recorded review at its own repository and commit", () => {
+    render(<ReviewDashboard />);
+
+    const links = screen.getAllByRole("link", { name: /view source/i });
+    expect(links.length).toBeGreaterThan(0);
+    for (const link of links) {
+      expect(link.getAttribute("href")).toContain(`/blob/${run.commit}/`);
+      expect(link.getAttribute("href")).toContain(run.result.repo_url.replace(/^https:\/\//, ""));
+    }
   });
 });

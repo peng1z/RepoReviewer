@@ -51,7 +51,37 @@ const VERDICT_LABELS: Record<Verdict, string> = {
 
 // The commit the recorded review ran against, so a row can link to the code
 // the reviewer actually saw rather than to a branch that has moved since.
-const DEMO_COMMIT = demoRuns[0]?.commit ?? "";
+/**
+ * A link into the code a finding points at, or null.
+ *
+ * This was hardcoded to psf/requests at the recorded run's commit, which is
+ * right for the recording and wrong for every live review: a run against any
+ * other repository sent "view source" into requests at a commit that has
+ * nothing to do with it.
+ *
+ * Returns null rather than guessing. A line number means nothing without the
+ * commit it was computed against, so with no commit there is no link -- the
+ * same reason the checking refuses to claim a position it cannot support.
+ * Only github.com is linkable; other hosts do not share the blob URL shape.
+ */
+export function sourceLink(
+  repoUrl: string,
+  commit: string | undefined,
+  file: string,
+  line: number | null,
+): string | null {
+  if (!commit || !repoUrl) return null;
+  let path: string;
+  try {
+    const url = new URL(repoUrl);
+    if (url.hostname !== "github.com") return null;
+    path = url.pathname.replace(/\.git$/, "").replace(/^\/+|\/+$/g, "");
+  } catch {
+    return null;
+  }
+  if (!path) return null;
+  return `https://github.com/${path}/blob/${commit}/${file}${line ? `#L${line}` : ""}`;
+}
 
 const VERDICT_SHORT: Record<Verdict, string> = {
   accurate: "in the code, at the line cited",
@@ -351,7 +381,13 @@ export function ReviewDashboard() {
           <ResultPanel result={job.result} jobId={job.id} apiBase={apiBase} />
         ) : null}
         {demo ? (
-          <ResultPanel result={demo.result} jobId={demo.slug} apiBase="" checks={demo.checks} />
+          <ResultPanel
+            result={demo.result}
+            jobId={demo.slug}
+            apiBase=""
+            checks={demo.checks}
+            commit={demo.commit}
+          />
         ) : null}
 
         <Citation />
@@ -586,11 +622,14 @@ function ResultPanel({
   jobId,
   apiBase,
   checks,
+  commit,
 }: {
   result: ReviewResult;
   jobId: string;
   apiBase: string;
   checks?: FindingCheck[];
+  /** The commit reviewed. Absent for a live run, which carries no sha. */
+  commit?: string;
 }) {
   return (
     <section style={sectionStyle}>
@@ -707,16 +746,21 @@ function ResultPanel({
                         {comment.snippet}
                       </pre>
                     ) : null}
-                    <p style={{ marginTop: 12 }}>
-                      <a
-                        href={`https://github.com/psf/requests/blob/${DEMO_COMMIT}/${comment.file}${
-                          comment.line ? `#L${comment.line}` : ""
-                        }`}
-                        style={{ fontSize: "0.85rem" }}
-                      >
-                        view source
-                      </a>
-                    </p>
+                    {(() => {
+                      const href = sourceLink(
+                        result.repo_url,
+                        commit,
+                        comment.file,
+                        comment.line,
+                      );
+                      return href ? (
+                        <p style={{ marginTop: 12 }}>
+                          <a href={href} style={{ fontSize: "0.85rem" }}>
+                            view source
+                          </a>
+                        </p>
+                      ) : null;
+                    })()}
                   </div>
                 </details>
               ))}
